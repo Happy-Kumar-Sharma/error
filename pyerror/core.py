@@ -2,8 +2,8 @@ import sys
 from typing import Dict, Any, List, Optional
 
 # Import formatter and suggestions
-from error.formatting import Formatter, JupyterHtmlWrapper
-from error.suggestions import SuggestionEngine
+from pyerror.formatting import Formatter, JupyterHtmlWrapper
+from pyerror.suggestions import SuggestionEngine
 
 # Global configuration state
 _enabled = False
@@ -83,7 +83,7 @@ def _custom_excepthook(exc_type, exc_value, exc_traceback):
 
     # Record to analytics automatically
     try:
-        from error.analytics import log_error
+        from pyerror.analytics import log_error
         log_error(exc_value)
     except Exception:
         pass
@@ -119,7 +119,7 @@ def _register_ipython_handler():
                 
                 # Record to analytics automatically
                 try:
-                    from error.analytics import log_error
+                    from pyerror.analytics import log_error
                     log_error(evalue)
                 except Exception:
                     pass
@@ -151,7 +151,6 @@ def humanize(enable: bool = True):
         _register_ipython_handler()
     else:
         sys.excepthook = _original_excepthook
-        # Restore default IPython handler (can be done by unregistering or disabling _enabled)
 
 def beginner_mode(enable: bool = True):
     """Enables humanize and sets traceback mode to beginner (minimalist stack trace)."""

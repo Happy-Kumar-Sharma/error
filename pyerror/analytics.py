@@ -190,7 +190,6 @@ class AnalyticsTracker:
             location = f"{filename}:{lineno} in {func_name}"
 
         # Signature: ExceptionType: message @ location
-        # Make it simple and clean
         signature = f"{exc_type}: {exc_msg} (@ {location})"
         now_str = datetime.utcnow().isoformat() + "Z"
 

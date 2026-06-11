@@ -19,7 +19,7 @@ except ImportError:
     RICH_AVAILABLE = False
 
 # Import suggestions engine
-from error.suggestions import SuggestionEngine
+from pyerror.suggestions import SuggestionEngine
 
 class Formatter:
     DEFAULT_SECRETS = ["password", "token", "secret", "key", "auth", "credential", "pwd", "pass", "ssn", "credit"]

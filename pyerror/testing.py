@@ -1,6 +1,6 @@
 from typing import List, Optional
-from error.suggestions import SuggestionEngine
-from error.formatting import Formatter
+from pyerror.suggestions import SuggestionEngine
+from pyerror.formatting import Formatter
 
 def assert_readable(exc: BaseException, min_suggestions: int = 1):
     """

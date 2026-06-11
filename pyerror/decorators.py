@@ -33,7 +33,7 @@ def retry(
                     
                     # Log or display warning to stderr
                     sys.stderr.write(
-                        f"⚠️ [error.retry] Attempt {attempt}/{tries} failed: {type(e).__name__}({e}). "
+                        f"⚠️ [pyerror.retry] Attempt {attempt}/{tries} failed: {type(e).__name__}({e}). "
                         f"Retrying in {sleep_time:.2f}s...\n"
                     )
                     sys.stderr.flush()

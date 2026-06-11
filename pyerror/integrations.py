@@ -7,8 +7,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict, Any, Optional, List
 
-from error.suggestions import SuggestionEngine
-from error.formatting import Formatter
+from pyerror.suggestions import SuggestionEngine
+from pyerror.formatting import Formatter
 
 # Global configurations for integrations
 _slack_webhook: Optional[str] = None
@@ -36,7 +36,7 @@ def notify_slack(exc: BaseException, webhook_url: Optional[str] = None) -> bool:
     """
     url = webhook_url or _slack_webhook
     if not url:
-        sys.stderr.write("⚠️ error.notify_slack: No webhook URL provided or configured.\n")
+        sys.stderr.write("⚠️ pyerror.notify_slack: No webhook URL provided or configured.\n")
         return False
         
     details = SuggestionEngine.get_details(exc)
@@ -83,7 +83,7 @@ def notify_slack(exc: BaseException, webhook_url: Optional[str] = None) -> bool:
         with urllib.request.urlopen(req, timeout=5) as response:
             return response.status == 200
     except Exception as e:
-        sys.stderr.write(f"⚠️ error.notify_slack: Failed to send Slack alert: {e}\n")
+        sys.stderr.write(f"⚠️ pyerror.notify_slack: Failed to send Slack alert: {e}\n")
         return False
 
 def notify_sentry(exc: BaseException, dsn: Optional[str] = None) -> bool:
@@ -99,11 +99,10 @@ def notify_sentry(exc: BaseException, dsn: Optional[str] = None) -> bool:
         sentry_sdk.capture_exception(exc)
         return True
     except ImportError:
-        # Fallback if SDK not installed: mock send via raw API or print log
-        sys.stderr.write("⚠️ error.notify_sentry: sentry_sdk is not installed. Exception details logged locally.\n")
+        sys.stderr.write("⚠️ pyerror.notify_sentry: sentry_sdk is not installed. Exception details logged locally.\n")
         return False
     except Exception as e:
-        sys.stderr.write(f"⚠️ error.notify_sentry: Failed to report to Sentry: {e}\n")
+        sys.stderr.write(f"⚠️ pyerror.notify_sentry: Failed to report to Sentry: {e}\n")
         return False
 
 def send_email(exc: BaseException, config: Optional[Dict[str, Any]] = None) -> bool:
@@ -113,12 +112,12 @@ def send_email(exc: BaseException, config: Optional[Dict[str, Any]] = None) -> b
     """
     email_cfg = config or _email_config
     if not email_cfg:
-        sys.stderr.write("⚠️ error.send_email: No email configuration provided.\n")
+        sys.stderr.write("⚠️ pyerror.send_email: No email configuration provided.\n")
         return False
         
     required_keys = ["host", "port", "sender", "recipient"]
     if not all(k in email_cfg for k in required_keys):
-        sys.stderr.write(f"⚠️ error.send_email: Missing one of required keys: {required_keys}\n")
+        sys.stderr.write(f"⚠️ pyerror.send_email: Missing one of required keys: {required_keys}\n")
         return False
         
     details = SuggestionEngine.get_details(exc)
@@ -131,7 +130,15 @@ def send_email(exc: BaseException, config: Optional[Dict[str, Any]] = None) -> b
     msg["Subject"] = subject
     msg["From"] = email_cfg["sender"]
     msg["To"] = email_cfg["recipient"]
-    msg.attach(MIMEText(str(error.explain(exc) if 'error' in sys.modules else details['translation']), "plain"))
+    
+    # Resolve helper or use details translation
+    if 'pyerror' in sys.modules:
+        import pyerror
+        plain_body = str(pyerror.explain(exc))
+    else:
+        plain_body = details['translation']
+        
+    msg.attach(MIMEText(plain_body, "plain"))
     msg.attach(MIMEText(html_body, "html"))
     
     try:
@@ -143,5 +150,5 @@ def send_email(exc: BaseException, config: Optional[Dict[str, Any]] = None) -> b
             server.sendmail(email_cfg["sender"], email_cfg["recipient"], msg.as_string())
         return True
     except Exception as e:
-        sys.stderr.write(f"⚠️ error.send_email: Failed to send email alert: {e}\n")
+        sys.stderr.write(f"⚠️ pyerror.send_email: Failed to send email alert: {e}\n")
         return False

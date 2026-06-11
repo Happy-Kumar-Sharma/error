@@ -1,12 +1,12 @@
 # 🚀 Deployment Guide
 
-This document outlines the step-by-step instructions to deploy the `error` library to **PyPI** (so users can run `pip install error`) and set up the **GitHub Pages Shared Exception Viewer** (so error links resolve correctly).
+This document outlines the step-by-step instructions to deploy the `pyerror` library to **PyPI** (so users can run `pip install pyerror`) and set up the **GitHub Pages Shared Exception Viewer** (so error links resolve correctly).
 
 ---
 
 ## 📦 1. Publishing to PyPI
 
-To make the package installable via `pip install error`, you need to package and upload it to PyPI.
+To make the package installable via `pip install pyerror`, you need to package and upload it to PyPI.
 
 ### Prerequisites
 Make sure you have `wheel` and `twine` installed:
@@ -40,7 +40,7 @@ Make sure you have `wheel` and `twine` installed:
 
 ## 🔗 2. Deploying the Shared Exception Viewer (GitHub Pages)
 
-The error sharing link utility (`error.generate_share_link(exc)`) points to:
+The error sharing link utility (`pyerror.generate_share_link(exc)`) points to:
 `https://happy-kumar-sharma.github.io/error/viewer.html`
 
 To activate this viewer, you need to enable GitHub Pages on your repository:
@@ -53,11 +53,11 @@ To activate this viewer, you need to enable GitHub Pages on your repository:
     ```
 
 2.  **Commit and Push Code**  
-    Initialize git (if not done already), commit all files (including the `docs/` folder containing `viewer.html`), and push to GitHub:
+    Initialize git (if not done already), commit all files (including the `docs/` folder containing `viewer.html` and the new `pyerror/` module folder), and push to GitHub:
     ```bash
     git init
     git add .
-    git commit -m "feat: initial release of error library with docs viewer"
+    git commit -m "feat: release pyerror library with docs viewer"
     git branch -M main
     git remote add origin https://github.com/Happy-Kumar-Sharma/error.git
     git push -u origin main

@@ -133,7 +133,7 @@ length = len(my_list)  # Raises TypeError because len is now an integer (integer
 
         # 3. IndexError
         elif isinstance(exc, IndexError):
-            result["translation"] = "You tried to access an element from a sequence (like a list) using an index that is out of range."
+            result["translation"] = "You tried to access a element from a sequence (like a list) using an index that is out of range."
             result["why"] = "The index you requested is either too large or too small for the sequence's current length."
             result["suggestions"] = [
                 "Remember that Python lists are 0-indexed. The first item is index 0, and the last item is len(sequence) - 1.",

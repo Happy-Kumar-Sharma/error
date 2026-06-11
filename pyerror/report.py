@@ -3,8 +3,8 @@ import os
 import platform
 from datetime import datetime
 from typing import Optional
-from error.suggestions import SuggestionEngine
-from error.formatting import Formatter
+from pyerror.suggestions import SuggestionEngine
+from pyerror.formatting import Formatter
 
 def generate_markdown_report(exc: BaseException, file_path: Optional[str] = None) -> str:
     """

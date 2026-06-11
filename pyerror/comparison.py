@@ -146,13 +146,9 @@ def compare(expected: Any, got: Any, value: Any = None) -> ComparisonResult:
     providing actionable conversion suggestions.
     
     Usage:
-        error.compare(int, str)
-        error.compare(int, "hello")
-        error.compare(expected=int, got=str, value="42")
+        pyerror.compare(int, str)
+        pyerror.compare(int, "hello")
+        pyerror.compare(expected=int, got=str, value="42")
     """
     result = ComparisonResult(expected, got, value)
-    # Automatically print beautiful CLI format if run interactively,
-    # or if stdout is a TTY. But wait, in notebooks we want to return the object
-    # so Jupyter renders it. Let's return it so the user has control, and in standard execution
-    # printing it will use __str__. If the user wants CLI panel they can call .show().
     return result

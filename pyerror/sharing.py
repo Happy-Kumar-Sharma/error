@@ -1,9 +1,10 @@
 import base64
 import zlib
 import json
+import os
 from typing import Dict, Any
-from error.suggestions import SuggestionEngine
-from error.formatting import Formatter
+from pyerror.suggestions import SuggestionEngine
+from pyerror.formatting import Formatter
 
 def generate_share_link(exc: BaseException) -> str:
     """
@@ -43,6 +44,3 @@ def generate_share_link(exc: BaseException) -> str:
         return f"{base_url}?data={b64_encoded}"
     except Exception as e:
         return f"Error generating share link: {e}"
-
-# Import os for path utility
-import os

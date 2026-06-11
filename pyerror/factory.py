@@ -13,7 +13,7 @@ def create(
     and carry custom suggestions that the formatter will automatically pick up.
     
     Example:
-        UserNotFound = error.create(
+        UserNotFound = pyerror.create(
             "UserNotFound", 
             message="User {user_id} was not found", 
             suggestions=["Check the ID", "Confirm user exists before lookup"]

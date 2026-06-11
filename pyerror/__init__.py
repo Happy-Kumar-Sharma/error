@@ -1,8 +1,8 @@
 """
-error: A Python error intelligence library for learners and production systems.
+pyerror: A Python error intelligence library for learners and production systems.
 """
 
-from error.core import (
+from pyerror.core import (
     configure,
     humanize,
     beginner_mode,
@@ -12,15 +12,15 @@ from error.core import (
     add_privacy_rule,
     to_json,
 )
-from error.context import ignore
-from error.decorators import retry, capture_locals, fallback
-from error.factory import create
-from error.comparison import compare
-from error.analytics import get_analytics, clear_analytics
-from error.sharing import generate_share_link
-from error.report import generate_markdown_report
-from error.testing import assert_readable, assert_not_exposed
-from error.integrations import configure_integrations, notify_slack, notify_sentry, send_email
+from pyerror.context import ignore
+from pyerror.decorators import retry, capture_locals, fallback
+from pyerror.factory import create
+from pyerror.comparison import compare
+from pyerror.analytics import get_analytics, clear_analytics
+from pyerror.sharing import generate_share_link
+from pyerror.report import generate_markdown_report
+from pyerror.testing import assert_readable, assert_not_exposed
+from pyerror.integrations import configure_integrations, notify_slack, notify_sentry, send_email
 
 __version__ = "0.1.0"
 

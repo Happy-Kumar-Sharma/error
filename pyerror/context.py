@@ -8,11 +8,11 @@ def ignore(*exceptions: Union[Type[BaseException], Tuple[Type[BaseException], ..
     Context manager that swallows specified exceptions.
     
     Usage:
-        with error.ignore(FileNotFoundError):
+        with pyerror.ignore(FileNotFoundError):
             os.remove("nonexistent.txt")
             
         # If no exceptions are specified, it ignores all standard Exceptions
-        with error.ignore():
+        with pyerror.ignore():
             1 / 0
     """
     # If no arguments provided, default to ignoring all Exception subclasses
