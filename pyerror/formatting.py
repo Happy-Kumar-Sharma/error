@@ -35,7 +35,7 @@ class Formatter:
         # Scrub assignment values for matching keywords, e.g. password = "abc"
         # Matches key="val", key='val', key=val, key : val, etc.
         for key in keys:
-            pattern = rf"(?i)\b({key})\b\s*([=:])\s*([\"']?)[^\s\"']+\3"
+            pattern = rf"(?i)\b(\w*{key}\w*)\b\s*([=:])\s*([\"']?)[^\s\"']+\3"
             text = re.sub(pattern, r"\1\2\3********\3", text)
             
         # Scrub potential Basic Auth credentials in URLs, e.g. http://user:pass@host
@@ -56,6 +56,18 @@ class Formatter:
         
         # Strip or normalize path
         filename = os.path.abspath(filename)
+        
+        # Check user-configured packages to hide
+        try:
+            from pyerror import core
+            hidden = getattr(core, "_hide_packages", [])
+            if hidden:
+                normalized_path = filename.replace("\\", "/")
+                for pkg in hidden:
+                    if f"/{pkg}/" in f"/{normalized_path}/" or normalized_path.endswith(f"/{pkg}"):
+                        return False
+        except ImportError:
+            pass
         
         # Check standard library paths
         std_lib_dir = os.path.dirname(os.__file__)
@@ -79,6 +91,25 @@ class Formatter:
         """Walks the traceback and returns details of all frames with sensitive info scrubbed."""
         frames = []
         tb = exc.__traceback__
+        
+        # Fallback for SyntaxError / IndentationError (which often have no traceback object)
+        if not tb and isinstance(exc, SyntaxError):
+            filename = exc.filename or "<stdin>"
+            lineno = exc.lineno or 0
+            code_line = exc.text or ""
+            if code_line.endswith("\n"):
+                code_line = code_line[:-1]
+                
+            frames.append({
+                "filename": filename,
+                "lineno": lineno,
+                "func_name": "<syntax-error>",
+                "code_line": cls.scrub_text(code_line.strip()),
+                "locals": {},
+                "is_user": cls.is_user_frame(filename) if filename else True
+            })
+            return frames
+
         while tb:
             frame = tb.tb_frame
             lineno = tb.tb_lineno
@@ -215,7 +246,7 @@ class Formatter:
             show_locals = (mode == "full") or (mode == "compact" and f == frames_to_display[-1])
             if show_locals and f["locals"]:
                 masked_l = cls.mask_locals(f["locals"], mask_secrets, secret_keys)
-                locals_table = Table(title="Local variables:", title_style="italic dim yellow", title_align="left", show_header=True, header_style="bold dim magenta", box=None, padding=(0, 2))
+                locals_table = Table(title="Local variables:", title_style="italic dim yellow", show_header=True, header_style="bold dim magenta", box=None, padding=(0, 2))
                 locals_table.add_column("Variable", style="cyan")
                 locals_table.add_column("Value", style="green")
                 

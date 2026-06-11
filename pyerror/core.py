@@ -10,6 +10,7 @@ _enabled = False
 _traceback_mode = "full"  # beginner, compact, full, production
 _mask_secrets = True
 _secret_keys = Formatter.DEFAULT_SECRETS.copy()
+_hide_packages = []
 _original_excepthook = sys.excepthook
 
 class DiagnosticsResult:
@@ -52,10 +53,11 @@ class DiagnosticsResult:
 def configure(
     traceback_mode: Optional[str] = None,
     mask_secrets: Optional[bool] = None,
-    secret_keys: Optional[List[str]] = None
+    secret_keys: Optional[List[str]] = None,
+    hide_packages: Optional[List[str]] = None,
 ):
     """Configures global error library settings."""
-    global _traceback_mode, _mask_secrets, _secret_keys
+    global _traceback_mode, _mask_secrets, _secret_keys, _hide_packages
     if traceback_mode is not None:
         if traceback_mode not in ("beginner", "compact", "full", "production"):
             raise ValueError("traceback_mode must be one of: 'beginner', 'compact', 'full', 'production'")
@@ -64,6 +66,8 @@ def configure(
         _mask_secrets = mask_secrets
     if secret_keys is not None:
         _secret_keys = list(secret_keys)
+    if hide_packages is not None:
+        _hide_packages = list(hide_packages)
 
 def add_privacy_rule(pattern: str):
     """Adds a custom string key to the list of secret keys to mask."""
@@ -175,3 +179,26 @@ def suggest(exc: BaseException) -> List[str]:
     """Returns the list of actionable suggestions for a caught exception."""
     details = SuggestionEngine.get_details(exc)
     return details["suggestions"]
+
+def inspect_last_error():
+    """
+    Inspects the last active exception in the interactive session (sys.last_value)
+    and displays its humanized diagnostics report.
+    """
+    exc_type = getattr(sys, "last_type", None)
+    exc_value = getattr(sys, "last_value", None)
+    exc_tb = getattr(sys, "last_traceback", None)
+    
+    if exc_value is None:
+        # Try retrieving from sys.exc_info() just in case we are in an except block
+        exc_type, exc_value, exc_tb = sys.exc_info()
+        
+    if exc_value is None:
+        sys.stderr.write("No active or previous exception found in this session.\n")
+        return
+        
+    # Bind traceback if not present on exc_value
+    if exc_tb and not getattr(exc_value, "__traceback__", None):
+        exc_value.__traceback__ = exc_tb
+        
+    explain(exc_value).show()

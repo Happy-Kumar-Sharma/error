@@ -40,6 +40,21 @@ class TestSuggestions(unittest.TestCase):
             self.assertEqual(details["name"], "AttributeError")
             self.assertIn("object that is None", details["why"])
 
+    def test_syntax_error_explanation(self):
+        exc = SyntaxError("invalid syntax", ("test.py", 5, 10, "if x = 5:"))
+        details = SuggestionEngine.get_details(exc)
+        self.assertEqual(details["name"], "SyntaxError")
+        self.assertIn("violates Python's writing rules", details["translation"])
+        self.assertIn("line 5", details["why"])
+        self.assertIn("if x = 5:", details["why"])
+
+    def test_indentation_error_explanation(self):
+        exc = IndentationError("expected an indented block", ("test.py", 3, 1, "print('hello')"))
+        details = SuggestionEngine.get_details(exc)
+        self.assertEqual(details["name"], "IndentationError")
+        self.assertIn("indentation of your code is incorrect", details["translation"])
+        self.assertIn("print('hello')", details["why"])
+
 class TestDecorators(unittest.TestCase):
     def test_fallback(self):
         @pyerror.fallback(default="fallback_value", exceptions=(ValueError,))
@@ -214,6 +229,64 @@ class TestNewFeatures(unittest.TestCase):
             
         # Should pass
         pyerror.assert_not_exposed(MockExceptionSafe())
+
+    def test_system_info(self):
+        # Inject sensitive env variables to verify scrubbing
+        os.environ["DATABASE_PASSWORD"] = "extremely_secret_password_123"
+        os.environ["API_KEY"] = "my_api_key_abc"
+        
+        info = pyerror.get_system_info()
+        self.assertIn("os_platform", info)
+        self.assertIn("python_version", info)
+        self.assertIn("cpu_count", info)
+        self.assertIn("memory_usage_percent", info)
+        
+        env = info["environment"]
+        self.assertEqual(env.get("DATABASE_PASSWORD"), "********")
+        self.assertEqual(env.get("API_KEY"), "********")
+        
+        # Clean up environment variables
+        del os.environ["DATABASE_PASSWORD"]
+        del os.environ["API_KEY"]
+
+    def test_traceback_hide_packages(self):
+        # Configure package to hide
+        pyerror.configure(hide_packages=["pyerror"])
+        
+        # Checking formatted paths with that package
+        test_path = os.path.abspath("pyerror/core.py")
+        is_user = Formatter.is_user_frame(test_path)
+        self.assertFalse(is_user)
+        
+        # Reset hide_packages configuration
+        pyerror.configure(hide_packages=[])
+        is_user_reset = Formatter.is_user_frame(test_path)
+        # It's in the workspace, so it should be true now
+        self.assertTrue(is_user_reset)
+
+    def test_inspect_last_error(self):
+        test_exc = ValueError("mock last error")
+        sys.last_type = type(test_exc)
+        sys.last_value = test_exc
+        sys.last_traceback = None
+        
+        with patch("sys.stderr.write") as mock_stderr:
+            pyerror.inspect_last_error()
+            self.assertTrue(mock_stderr.called)
+            
+        # Clean up
+        if hasattr(sys, "last_type"):
+            del sys.last_type
+        if hasattr(sys, "last_value"):
+            del sys.last_value
+        if hasattr(sys, "last_traceback"):
+            del sys.last_traceback
+
+    def test_web_framework_flask_mock(self):
+        mock_app = MagicMock()
+        pyerror.register_flask_error_handler(mock_app)
+        # Assert errorhandler decorator was called for Exception
+        mock_app.errorhandler.assert_called_once_with(Exception)
 
 if __name__ == "__main__":
     unittest.main()

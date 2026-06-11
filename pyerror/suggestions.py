@@ -284,4 +284,83 @@ ratio = total_score / count  # Raises ZeroDivisionError if count is 0
 #  Correct:
 ratio = total_score / count if count != 0 else 0.0"""
 
+        # 10. SyntaxError / IndentationError / TabError
+        elif isinstance(exc, SyntaxError):
+            result["translation"] = "Python encountered a line of code that violates Python's writing rules (syntax)."
+            
+            # Extract line contents if possible
+            bad_line = exc.text.strip() if exc.text else ""
+            line_str = f" line {exc.lineno}" if exc.lineno else ""
+            
+            # Check subclass
+            if isinstance(exc, TabError):
+                result["translation"] = "Spaces and tabs were mixed for indenting the code."
+                result["why"] = f"Python does not allow mixing tab characters and spaces for indentation{line_str}."
+                if bad_line:
+                    result["why"] += f" The problematic line is: '{bad_line}'."
+                result["suggestions"] = [
+                    "Configure your editor to automatically convert tabs to spaces (4 spaces is the Python standard).",
+                    "Replace all tab characters in your file with 4 spaces.",
+                    "Check your editor settings to enable showing invisible/whitespace characters to spot mixed tabs and spaces."
+                ]
+                result["example"] = """# ❌ Incorrect (mixed tabs and spaces):
+def greet():
+\tprint("Hello")  # Tab character used
+    print("World")  # Spaces used
+
+#  Correct (spaces only):
+def greet():
+    print("Hello")
+    print("World")"""
+            elif isinstance(exc, IndentationError):
+                result["translation"] = "The indentation of your code is incorrect."
+                result["why"] = f"A line of code{line_str} is not aligned with the correct indentation level, or you forgot to indent the code block after a colon (:)."
+                if bad_line:
+                    result["why"] += f" The problematic line is: '{bad_line}'."
+                result["suggestions"] = [
+                    "Make sure all code lines inside a function, loop, condition (if/elif/else), or try/except block are aligned to the same indentation level.",
+                    "Verify that the line immediately preceding the indented block ends with a colon (:).",
+                    "Avoid mixing different amounts of spaces (e.g. some lines with 3 spaces and some with 4 spaces)."
+                ]
+                result["example"] = """# ❌ Incorrect:
+def greet():
+print("Hello")  # Raises IndentationError: expected an indented block
+
+#  Correct:
+def greet():
+    print("Hello")  # Indented with 4 spaces"""
+            else:
+                # General SyntaxError
+                result["why"] = f"A statement or expression was written incorrectly{line_str}."
+                if bad_line:
+                    result["why"] += f" The problematic line is: '{bad_line}'."
+                
+                # Check common syntax error types
+                if "was never closed" in exc_msg or "unexpected EOF" in exc_msg:
+                    result["why"] += " This is usually due to a missing closing parenthesis ')', bracket ']', or curly brace '}'."
+                    result["suggestions"] = [
+                        "Check the code for any unclosed parentheses '(', brackets '[', or braces '{'.",
+                        "Ensure that all quotes (single, double, triple) are correctly opened and closed on the same line."
+                    ]
+                elif "expected ':'" in exc_msg:
+                    result["why"] += " You forgot to put a colon ':' at the end of a block header (like 'if', 'for', 'while', 'def', 'class', or 'try')."
+                    result["suggestions"] = [
+                        "Add a colon ':' to the end of the line preceding the indented block.",
+                        "Check for typos on the line preceding the block start."
+                    ]
+                else:
+                    result["suggestions"] = [
+                        "Check the line for missing colons ':', parentheses, brackets, or unmatched quotes.",
+                        "Ensure that Python keywords (like 'for', 'in', 'if', 'import') are spelled correctly and used in the right order.",
+                        "If typing multi-line statements in the REPL, make sure you don't start a new statement before closing the previous block."
+                    ]
+                
+                result["example"] = """# ❌ Incorrect:
+if name == "Alice"  # Missing colon
+    print("Hello")
+
+#  Correct:
+if name == "Alice":
+    print("Hello")"""
+
         return result

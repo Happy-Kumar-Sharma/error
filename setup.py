@@ -17,7 +17,7 @@ def get_requirements(file_path: str) -> list[str]:
     return [req for req in requirements if req and not req.startswith("#")]
 
 setup(
-    name='error',
+    name='pyerror-intel',
     version='0.1.0',
     description='A Python error intelligence library for learners and production systems.',
     long_description=open("README.md", encoding="utf-8").read(),

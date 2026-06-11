@@ -1,0 +1,10 @@
+{
+  "KeyError: 'missing' (@ test_pyerror.py:162 in test_recording)": {
+    "count": 1,
+    "first_seen": "2026-06-11T17:59:40.375398Z",
+    "last_seen": "2026-06-11T17:59:40.375398Z",
+    "location": "test_pyerror.py:162 in test_recording",
+    "type": "KeyError",
+    "message": "'missing'"
+  }
+}

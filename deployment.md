@@ -1,12 +1,12 @@
 # 🚀 Deployment Guide
 
-This document outlines the step-by-step instructions to deploy the `pyerror` library to **PyPI** (so users can run `pip install pyerror`) and set up the **GitHub Pages Shared Exception Viewer** (so error links resolve correctly).
+This document outlines the step-by-step instructions to deploy the `pyerror-intel` library to **PyPI** (so users can run `pip install pyerror-intel`) and set up the **GitHub Pages Shared Exception Viewer** (so error links resolve correctly).
 
 ---
 
 ## 📦 1. Publishing to PyPI
 
-To make the package installable via `pip install pyerror`, you need to package and upload it to PyPI.
+To make the package installable via `pip install pyerror-intel`, you need to package and upload it to PyPI.
 
 ### Prerequisites
 Make sure you have `wheel` and `twine` installed:

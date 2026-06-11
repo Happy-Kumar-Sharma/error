@@ -1,293 +1,379 @@
 # pyerror 🧠
 
-[![PyPI Version](https://img.shields.io/pypi/v/pyerror.svg)](https://pypi.org/project/pyerror/)
-[![Python Version](https://img.shields.io/pypi/pyversions/pyerror.svg)](https://pypi.org/project/pyerror/)
+[![PyPI Version](https://img.shields.io/pypi/v/pyerror-intel.svg)](https://pypi.org/project/pyerror-intel/)
+[![Python Version](https://img.shields.io/pypi/pyversions/pyerror-intel.svg)](https://pypi.org/project/pyerror-intel/)
 [![License](https://img.shields.io/github/license/Happy-Kumar-Sharma/error.svg)](https://github.com/Happy-Kumar-Sharma/error/blob/main/LICENSE)
 
 > **Because common sense is not so common. Now it is — in Python!**
 > A Python error intelligence library for learners, developers, and production systems.
 
-Most traceback libraries just pretty-print logs. `pyerror` understands your errors, translates them into plain English, suggests exact fixes, captures local scope details, and recovers gracefully when needed. 
-
-It works in **two modes**:
-*   **Beginner Mode**: Formatted specifically for students. Hides intimidating internal library frames, translates jargon to plain English, and explains the concepts.
-*   **Power Mode**: Built for developers and production apps. Captures snapshots of local variables at the moment of failure (while masking secrets), filters tracebacks, aggregates error analytics, and formats logs into structured JSON.
-
----
-
-## 🚀 Key Features
-
-*   **Human-Readable Tracebacks**: Translates complex traceback outputs into friendly, clear, plain-English explanations.
-*   **Actionable Fix Suggestions**: Generates exact, context-aware suggestions for standard Python exceptions (KeyError, TypeError, AttributeError, ValueError, and more).
-*   **Decorators for Resiliency**: Includes `@retry` with exponential backoff, `@capture_locals` to snapshot scope at failure, and `@fallback` for graceful degradation.
-*   **Safety Net Contexts**: Clean exception suppressing with `with ignore(...)`.
-*   **Dynamic Custom Exception Factory**: Create rich, professional custom exception classes in one line with built-in templates and suggestions.
-*   **Error Diff Comparison**: Visualize and explain type/value differences using `pyerror.compare(expected, got)`.
-*   **Error Analytics**: Automatically groups and counts repeated exceptions across project runs.
-*   **Environment Adapting Display**: Renders beautifully colorized panels in the Terminal, interactive HTML accordion containers in **Jupyter Notebooks**, and clean JSON in **Production Logs**.
+`pyerror` is a complete diagnostics ecosystem that translates tracebacks, suggests fixes, captures local scope details safely, and recovers gracefully when needed. It works in the Terminal, Jupyter Notebooks, and Production environments.
 
 ---
 
 ## 📦 Installation
 
 Install the package via `pip`:
-
 ```bash
-pip install pyerror
+pip install pyerror-intel
 ```
+*(Note: Always import the library as `pyerror` in your scripts)*
 
 ---
 
-## 🎮 Quick Start
+## 🎮 Complete Functionality Reference
 
-### For Beginners (Students)
-Turn on `beginner_mode` at the top of your script. Any uncaught exceptions will be output as friendly explanations.
+Below is a detailed guide on all **28 public APIs** and configurations provided by `pyerror`, categorized by feature area.
 
+---
+
+### 1. Core Interface
+
+#### `pyerror.beginner_mode(enable: bool)`
+Enables or disables beginner mode. Sets the traceback output to a minimalist visual panel (hiding library internals) and translates exceptions into friendly explanation blocks. Ideal for classrooms or coding bootcamps.
 ```python
 import pyerror
-pyerror.beginner_mode(True)
+pyerror.beginner_mode(True) # Turns on beginner mode
 
-# Let's trigger a NameError:
-print(unknown_variable)
+# Triggering an error:
+print(x) # Raises NameError and prints simple explanation panel
 ```
 
-**Output in Terminal:**
-```text
-=== [ERROR] NameError: name 'unknown_variable' is not defined ===
-
-💡 Error Explanation:
-You used a variable, function, or module name that has not been defined yet.
-Python searched for the name 'unknown_variable' in your code but couldn't find any definition for it.
-
-🔍 Traceback (Filtered):
-  File "quickstart.py", line 5 in <module>
-    print(unknown_variable)
-
-🛠️ Suggestions:
-  * Check for spelling mistakes or typos in the name 'unknown_variable'.
-  * Ensure that you have defined the variable/function BEFORE trying to use it.
-  * If 'unknown_variable' is from an external library, make sure you have imported it.
-```
-
----
-
-### For Developers (Power Mode)
-
-Enable customized error formatting with `humanize()` and configure traceback styles:
-
+#### `pyerror.humanize(enable: bool)`
+Overrides the default `sys.excepthook` with the `pyerror` formatting console handler. Uncaught exceptions will automatically print the detailed explanation panels.
 ```python
 import pyerror
-
-# Enable formatting and log tracking
-pyerror.humanize(True)
-pyerror.configure(traceback_mode="compact") # compact, full, beginner, or production
+pyerror.humanize(True) # Activates humanized excepthooks
 ```
 
-#### 1. Scope Variable Snapshot (`@capture_locals`)
-Snapshot local variables immediately when a function fails. Secrets like tokens and passwords are automatically masked!
-
+#### `pyerror.configure(...)`
+Configures global library parameters:
+*   `traceback_mode`: `"beginner"`, `"compact"`, `"full"`, or `"production"` (JSON output).
+*   `mask_secrets`: `True` / `False` to enable local variable masking.
+*   `secret_keys`: list of keys to mask.
+*   `hide_packages`: list of package names (e.g. `["requests"]`) to filter out of traceback stacks.
 ```python
-@pyerror.capture_locals
-def calculate_ratio(total, count, api_key="secret-token-123"):
-    fraction = total / count
-    return fraction
-
-calculate_ratio(10, 0)
+pyerror.configure(
+    traceback_mode="compact",
+    mask_secrets=True,
+    secret_keys=["db_password", "auth_token"],
+    hide_packages=["numpy", "pandas"]
+)
 ```
 
-#### 2. Graceful Decorators (`@retry` & `@fallback`)
-Add resiliency and default values to unstable functions:
-
+#### `pyerror.inspect_last_error()`
+A post-mortem utility for interactive REPL or Python console sessions. Inspects `sys.last_value` from the most recent crash and prints its formatted report.
 ```python
-# Retry calling 3 times with exponential backoff and full jitter on ConnectionError
-@pyerror.retry(tries=3, delay=1.0, backoff=2.0, jitter=True, exceptions=(ConnectionError,))
-def fetch_user_data():
-    # your api call logic
-    pass
-
-# Fallback gracefully instead of crashing
-@pyerror.fallback(default=[])
-def load_cached_items():
-    raise FileNotFoundError("Cache file missing")
-    
-print(load_cached_items()) # Outputs: []
-```
-
-#### 3. Safety Net Context Managers (`ignore`)
-Safely ignore specific errors when executing cleanup operations:
-
-```python
-import os
-
-# Safely ignore if file doesn't exist
-with pyerror.ignore(FileNotFoundError):
-    os.remove("temporary_log.txt")
+>>> import pyerror
+>>> print(x)
+NameError: name 'x' is not defined
+>>> pyerror.inspect_last_error() # Prints humanized report panel for NameError
 ```
 
 ---
 
-## 🛠️ Diagnostics & Utilities
+### 2. Diagnostics & On-Demand Analysis
 
-### Exception Explanation (`pyerror.explain` & `pyerror.suggest`)
-Explain caught exceptions on demand:
-
+#### `pyerror.explain(exc: BaseException)`
+Returns a `DiagnosticsResult` wrapper containing translation, reason, suggestions, and source lines. Support rendering as a string or rich print.
 ```python
 try:
-    my_dict = {"id": 1}
-    val = my_dict["name"]
-except KeyError as exc:
-    # Get direct suggestions
-    print(pyerror.suggest(exc))
-    
-    # Or get details & display them (Renders beautiful HTML in Jupyter Notebooks!)
+    1 / 0
+except ZeroDivisionError as exc:
+    # Prints premium diagnostic panels (Terminal colorized)
     pyerror.explain(exc).show()
 ```
 
-### Type and Value Comparison (`pyerror.compare`)
-Compare types or values and output a readable description and suggested cast:
-
+#### `pyerror.diagnose(exc: BaseException)`
+Similar to `explain`, retrieves detailed diagnostic data and returns a `DiagnosticsResult` object. In Jupyter Notebooks, it renders interactive HTML accordion widgets automatically.
 ```python
-# Type mismatch comparison
-pyerror.compare(expected=int, got=str, value="42").show()
+# In Jupyter Notebook cell:
+try:
+    my_list = [1, 2]
+    val = my_list[5]
+except IndexError as exc:
+    pyerror.diagnose(exc) # Renders responsive HTML widget in Jupyter output
 ```
 
-### Rich Custom Exception Factory (`pyerror.create`)
-Create highly informative custom exceptions instantly:
-
+#### `pyerror.suggest(exc: BaseException)`
+Returns a Python list of strings containing actionable steps to resolve the caught exception.
 ```python
-UserNotFound = pyerror.create(
-    "UserNotFound",
-    message="User profile with ID {user_id} was not found in database.",
-    suggestions=[
-        "Confirm the user ID exists in the admin dashboard.",
-        "Check if the database connection is healthy.",
-        "Verify caching headers."
-    ]
-)
+try:
+    import invalid_library
+except ModuleNotFoundError as exc:
+    suggestions = pyerror.suggest(exc)
+    print(suggestions)
+    # Output: ["Install the module using pip...", "Verify you are running...", ...]
+```
 
-raise UserNotFound(user_id=8923)
+#### `pyerror.compare(expected: Any, got: Any, value: Any = None)`
+Compares types or values and returns a `ComparisonResult` detailing the difference and offering code suggestions for casting or validation.
+```python
+# Value mismatch check
+pyerror.compare(expected=int, got=str, value="100").show()
 ```
 
 ---
 
-## 📊 Error Analytics & Grouping
-`pyerror` automatically logs and groups exception counts across project executions into `.error_analytics.json`. You can print this breakdown at the end of an execution, or build reports:
+### 3. Resiliency Decorators
 
+#### `@pyerror.capture_locals`
+Decorates a function so that if it crashes, a snapshot of all local variables is captured inside the exception object (as `exc.__captured_locals__`). Secrets and keys are automatically masked.
 ```python
-# Fetch error analytics report
+@pyerror.capture_locals
+def process_data(user_id, token="secret_token"):
+    result = user_id + "100" # Raises TypeError
+    return result
+
+try:
+    process_data(42)
+except TypeError as exc:
+    print(exc.__captured_locals__)
+    # Output: {'process_data': {'user_id': '42', 'token': '********'}}
+```
+
+#### `@pyerror.retry(...)`
+Retries calling the decorated function on failure.
+*   `tries`: Number of attempts.
+*   `delay`: Wait time in seconds between retries.
+*   `backoff`: Multiplier to increase delay exponentially.
+*   `jitter`: `True` / `False` to randomize delay intervals (prevents thundering herds).
+*   `exceptions`: Tuple of exception types to trigger retries.
+```python
+@pyerror.retry(tries=3, delay=1.0, backoff=2.0, jitter=True, exceptions=(ConnectionError,))
+def connect_to_server():
+    # Attempt network connection
+    raise ConnectionError("Timeout")
+```
+
+#### `@pyerror.fallback(default, exceptions=Exception)`
+Catches specified exceptions inside the decorated function and returns the provided default fallback value instead of crashing.
+```python
+@pyerror.fallback(default={}, exceptions=(FileNotFoundError, ValueError))
+def load_config():
+    raise FileNotFoundError("Config missing")
+
+print(load_config()) # Returns: {}
+```
+
+---
+
+### 4. Context Managers
+
+#### `pyerror.ignore(*exceptions)`
+Safely silences specified exceptions during code execution.
+```python
+import os
+# Ignores FileNotFoundError if file is already deleted
+with pyerror.ignore(FileNotFoundError):
+    os.remove("nonexistent.txt")
+```
+
+---
+
+### 5. Custom Exceptions
+
+#### `pyerror.create(name: str, message: str, suggestions: list)`
+Dynamically creates a custom Exception class. Supports string format parameters (`message.format(**kwargs)`) and embeds recommendations directly into the exception object.
+```python
+DatabaseFailure = pyerror.create(
+    "DatabaseFailure",
+    message="Connection lost to host: {host}",
+    suggestions=["Verify network interface", "Ping database hostname"]
+)
+
+# Raise custom exception
+raise DatabaseFailure(host="db.local")
+```
+
+---
+
+### 6. Logging & Exporting Reports
+
+#### `pyerror.to_json(exc: BaseException) -> str`
+Serializes the exception type, message, translation, reasons, suggestions, and traceback frames (with scrubbed variables) into a structured JSON string.
+```python
+try:
+    1 / 0
+except ZeroDivisionError as exc:
+    json_log = pyerror.to_json(exc)
+    print(json_log)
+```
+
+#### `pyerror.generate_markdown_report(exc: BaseException, file_path: str = None) -> str`
+Generates a detailed markdown diagnostic report. If `file_path` is specified, writes the report directly to that file.
+```python
+try:
+    db_query()
+except Exception as exc:
+    pyerror.generate_markdown_report(exc, file_path="triage_report.md")
+```
+
+#### `pyerror.generate_share_link(exc: BaseException) -> str`
+Compresses exception data and creates a self-contained, base64-encoded URL sharing link pointing to the static exception viewer client.
+```python
+try:
+    raise ValueError("Invalid credentials configuration")
+except Exception as exc:
+    link = pyerror.generate_share_link(exc)
+    print("Send this link to developer chat:", link)
+    # Output: https://happy-kumar-sharma.github.io/error/viewer.html?data=eJyN...
+```
+
+---
+
+### 7. System & Analytics Tracking
+
+#### `pyerror.get_system_info() -> dict`
+Returns system specs (OS version, architecture, CPU count, memory usage) and environment variables scrubbed of passwords/keys.
+```python
+stats = pyerror.get_system_info()
+print(stats["os_platform"]) # E.g., Windows
+print(stats["memory_usage_percent"]) # E.g., 45.2
+```
+
+#### `pyerror.get_analytics()`
+Retrieves the logged analytics data. Identifies recurring errors across runs, showing frequency metrics and timestamps.
+```python
 report = pyerror.get_analytics()
+report.show() # Prints recurring exception summary table
+```
 
-# Display beautiful summary table
-report.show()
-
-# Or clear stats
+#### `pyerror.clear_analytics()`
+Clears all recorded exception analytics records.
+```python
 pyerror.clear_analytics()
 ```
 
 ---
 
-## 🔌 Webhooks & Integrations
-Notify Slack, Sentry, or send emails automatically when failures occur.
+### 8. Web Framework Integrations
 
+#### `pyerror.register_flask_error_handler(app)`
+Registers a global handler on a Flask application instance to catch all unhandled route exceptions and return structured JSON diagnostic responses.
 ```python
-# Configure credentials
+from flask import Flask
+import pyerror
+
+app = Flask(__name__)
+pyerror.register_flask_error_handler(app)
+
+@app.route("/")
+def index():
+    return 1 / 0 # Automatically caught and formatted as JSON with 500 code
+```
+
+#### `pyerror.FastAPIErrorMiddleware`
+ASGI middleware class for FastAPI / Starlette applications to catch routing exceptions and return humanized JSON responses.
+```python
+from fastapi import FastAPI
+import pyerror
+
+app = FastAPI()
+app.add_middleware(pyerror.FastAPIErrorMiddleware)
+```
+
+---
+
+### 9. Slack, Sentry, & Email Alerts
+
+#### `pyerror.configure_integrations(slack_webhook=None, sentry_dsn=None, email_config=None)`
+Sets up notification destinations for error routing:
+```python
 pyerror.configure_integrations(
     slack_webhook="https://hooks.slack.com/services/...",
     sentry_dsn="https://...",
     email_config={
-        "host": "smtp.mailtrap.io",
-        "port": 2525,
+        "host": "smtp.example.com",
+        "port": 587,
         "sender": "alerts@myproject.com",
-        "recipient": "dev-ops@myproject.com",
-        "username": "smtp-username",
+        "recipient": "admin@myproject.com",
+        "username": "smtp-user",
         "password": "smtp-password"
     }
 )
+```
 
+#### `pyerror.notify_slack(exc: BaseException)`
+Posts exception diagnostics to the configured Slack Webhook using Block Kit layout.
+```python
 try:
-    # Trigger an issue
     1 / 0
-except ZeroDivisionError as exc:
-    # Post rich details to Slack Webhook blocks
+except Exception as exc:
     pyerror.notify_slack(exc)
-    
-    # Forward exception to Sentry
+```
+
+#### `pyerror.notify_sentry(exc: BaseException)`
+Captures and sends the exception details to the configured Sentry DSN endpoint.
+```python
+try:
+    1 / 0
+except Exception as exc:
     pyerror.notify_sentry(exc)
-    
-    # Send HTML diagnostic email
+```
+
+#### `pyerror.send_email(exc: BaseException)`
+Compiles and sends a structured HTML report email containing the exception's diagnostics and traceback.
+```python
+try:
+    1 / 0
+except Exception as exc:
     pyerror.send_email(exc)
 ```
 
 ---
 
-## 🔒 Advanced Privacy Filter
-In addition to local variable masking, `pyerror` scrubs passwords, Basic Auth tokens, API keys, and Credit Card details directly from exception messages, tracebacks, and source lines.
+### 10. Privacy & Security
 
-You can register custom secrets to match:
+#### `pyerror.add_privacy_rule(pattern: str)`
+Registers a case-insensitive variable/text pattern. If any variable name in local snapshots or text in tracebacks matches the rule, it is replaced with `********`.
 ```python
-# Any local variable or text matching "auth_token" will be masked
-pyerror.add_privacy_rule("auth_token")
+pyerror.add_privacy_rule("session_token")
 ```
 
 ---
 
-## 🔗 Self-Contained Sharing Links
-Compresses exception data using `zlib` and `base64` to generate sharing links. Excellent for sharing diagnostic reports with other developers:
+### 11. Unit Test Helpers
 
-```python
-try:
-    my_function()
-except Exception as exc:
-    link = pyerror.generate_share_link(exc)
-    # Outputs: https://happy-kumar-sharma.github.io/error/viewer.html?data=eJxtz0kO...
-```
-
----
-
-## 📝 Markdown Report Generation
-Create standard Markdown diagnostics logs for archiving or attaching to GitHub Issues/Triage tickets:
-
-```python
-try:
-    load_database()
-except ConnectionError as exc:
-    # Save a detailed report to a markdown file
-    pyerror.generate_markdown_report(exc, file_path="logs/database_failure.md")
-```
-
----
-
-## 🧪 Unit Test Helpers
-Assert that your custom exceptions match human-readability standards and do not leak plain-text credentials:
-
+#### `pyerror.assert_readable(exc: BaseException, min_suggestions: int = 1)`
+Asserts that an exception has a registered translation, why reason, and a minimum number of suggestions. Excellent for validating custom exceptions.
 ```python
 import unittest
 import pyerror
 
-class TestMyCode(unittest.TestCase):
-    def test_custom_exception(self):
+class TestCustomErrors(unittest.TestCase):
+    def test_readability(self):
+        exc = MyException()
+        pyerror.assert_readable(exc, min_suggestions=1)
+```
+
+#### `pyerror.assert_not_exposed(exc: BaseException)`
+Asserts that the exception's local snapshots (if captured) do not contain unmasked secret key values (like passwords, keys, tokens).
+```python
+import unittest
+import pyerror
+
+class TestSecurity(unittest.TestCase):
+    def test_secrets_masked(self):
         try:
-            # Code that raises UserNotFound
-            raise UserNotFound(user_id=10)
+            # function with @capture_locals
+            sensitive_function() 
         except Exception as exc:
-            # 1. Assert exception has clear explanation, why description, and >= 2 suggestions
-            pyerror.assert_readable(exc, min_suggestions=2)
-            
-            # 2. Assert local scopes do not leak any passwords, keys, or secret keys
             pyerror.assert_not_exposed(exc)
 ```
 
 ---
 
-## ⚙️ Configuration Options
+## ⚙️ Configuration Table
 
-Customize behavior with `pyerror.configure(...)`:
+Configure settings anytime using `pyerror.configure(...)`.
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `traceback_mode` | `str` | `"full"` | Traceback level: `"beginner"`, `"compact"`, `"full"`, or `"production"` (outputs JSON). |
+| `traceback_mode` | `str` | `"full"` | Traceback level: `"beginner"`, `"compact"`, `"full"`, or `"production"`. |
 | `mask_secrets` | `bool` | `True` | Automatically mask password/token variables in local snapshots. |
 | `secret_keys` | `list` | `[...]` | Custom variable names to mask (case-insensitive substring match). |
+| `hide_packages` | `list` | `[]` | List of package names to filter out of traceback stacks. |
 
 ---
 
