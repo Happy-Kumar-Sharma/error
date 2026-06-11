@@ -182,11 +182,21 @@ else:
     print("User not found")"""
             else:
                 result["why"] = f"The object does not have the attribute or method named '{attr_name}'."
-                result["suggestions"] = [
+                suggestions = [
                     f"Check the spelling of the attribute '{attr_name}'.",
                     "List the available attributes of this object using 'dir(object)' to see what is valid.",
                     "Confirm that the object is of the type you expect (print its type using 'type(object)')."
                 ]
+                
+                # Check spelling suggestions via difflib if obj is available on the error (Python 3.10+)
+                obj = getattr(exc, "obj", None)
+                name = getattr(exc, "name", None) or attr_name
+                if obj is not None:
+                    import difflib
+                    close_matches = difflib.get_close_matches(name, dir(obj), n=2)
+                    for match in close_matches:
+                        suggestions.insert(0, f"💡 Did you mean to use attribute/method '{match}'?")
+                result["suggestions"] = suggestions
 
         # 5. NameError
         elif isinstance(exc, NameError):
@@ -195,12 +205,45 @@ else:
             var_name = match_name.group(1) if match_name else "variable"
             
             result["why"] = f"Python searched for the name '{var_name}' in your code but couldn't find any definition for it."
-            result["suggestions"] = [
+            
+            suggestions = [
                 f"Check for spelling mistakes or typos in the name '{var_name}'.",
                 "Ensure that you have defined the variable/function BEFORE trying to use it.",
-                f"If '{var_name}' is from an external library, make sure you have imported it (e.g. 'import {var_name}' or 'from library import {var_name}').",
                 "Check the scope of the variable. Variables defined inside a function cannot be accessed outside of it."
             ]
+            
+            # Check standard library suggestion
+            common_libs = {
+                "cos": "math", "sin": "math", "tan": "math", "sqrt": "math", "pi": "math",
+                "pathname": "os.path", "join": "os.path", "exists": "os.path",
+                "argv": "sys", "exit": "sys", "path": "sys",
+                "dumps": "json", "loads": "json",
+                "sleep": "time", "time": "time",
+                "search": "re", "match": "re", "sub": "re",
+                "utcnow": "datetime.datetime", "now": "datetime.datetime",
+            }
+            if var_name in common_libs:
+                suggestions.insert(0, f"💡 Did you mean to import '{var_name}' from the '{common_libs[var_name]}' library? Try adding 'import {common_libs[var_name]}' or 'from {common_libs[var_name]} import {var_name}'.")
+            
+            # Check close spelling matches in current frame
+            import difflib
+            possibilities = list(__builtins__.keys()) if isinstance(__builtins__, dict) else dir(__builtins__)
+            tb = exc.__traceback__
+            if tb:
+                # Walk to the last frame
+                curr_tb = tb
+                while curr_tb.tb_next:
+                    curr_tb = curr_tb.tb_next
+                possibilities.extend(curr_tb.tb_frame.f_globals.keys())
+                possibilities.extend(curr_tb.tb_frame.f_locals.keys())
+            
+            # Filter out current var name
+            possibilities = [p for p in possibilities if p != var_name]
+            close_matches = difflib.get_close_matches(var_name, possibilities, n=2)
+            for match in close_matches:
+                suggestions.insert(0, f"💡 Did you mean the defined variable '{match}'?")
+                
+            result["suggestions"] = suggestions
             result["example"] = """# ❌ Incorrect:
 print(message)  # Raises NameError: name 'message' is not defined
 message = "Hello"
@@ -362,5 +405,43 @@ if name == "Alice"  # Missing colon
 #  Correct:
 if name == "Alice":
     print("Hello")"""
+
+        # 11. OSError (PermissionError, ConnectionRefusedError, ConnectionResetError, AddressInUse)
+        elif isinstance(exc, OSError):
+            import errno
+            err = exc.errno
+            
+            if isinstance(exc, PermissionError) or err == errno.EACCES:
+                result["translation"] = "Python was denied access to read or write to a file or folder."
+                result["why"] = f"The file path '{getattr(exc, 'filename', '') or ''}' requires administrator/root privileges, or the file is currently locked by another program."
+                result["suggestions"] = [
+                    "Check if the file is currently open in another application and close it.",
+                    "Ensure your user account has write/read permissions for this directory.",
+                    "Try running the terminal command prompt as administrator (or using 'sudo' on Linux/macOS)."
+                ]
+            elif isinstance(exc, ConnectionRefusedError) or err == errno.ECONNREFUSED:
+                result["translation"] = "The connection was actively refused by the target server."
+                result["why"] = "No service is listening on the specified port on the target host, or a firewall is blocking access."
+                result["suggestions"] = [
+                    "Verify that the target server process is running and healthy.",
+                    "Double-check the hostname/IP address and port number configuration.",
+                    "Check local and remote firewall rules to ensure they allow traffic on this port."
+                ]
+            elif isinstance(exc, ConnectionResetError) or err == errno.ECONNRESET:
+                result["translation"] = "The socket connection was forcibly closed by the remote server."
+                result["why"] = "The remote host crashed, shut down, or reset the connection unexpectedly."
+                result["suggestions"] = [
+                    "Check the remote server log files for any unhandled exceptions or crash reports.",
+                    "Implement a retry strategy (e.g., using `@pyerror.retry`) to re-establish the connection.",
+                    "Verify if network connectivity or a proxy timeout killed the connection."
+                ]
+            elif err == getattr(errno, "EADDRINUSE", 98):
+                result["translation"] = "The network port or address is already in use by another process."
+                result["why"] = "Another program on your system is already running and listening on this exact port."
+                result["suggestions"] = [
+                    "Find the process utilizing this port and terminate it (e.g., netstat -ano on Windows, lsof -i :PORT on Unix).",
+                    "Change the port configuration of your application to listen on a different unused port.",
+                    "Wait a few seconds for the operating system to release the socket after closing a previous process."
+                ]
 
         return result

@@ -13,8 +13,10 @@ from pyerror.core import (
     to_json,
     inspect_last_error,
 )
-from pyerror.context import ignore
+from pyerror.context import ignore, capture_scope
 from pyerror.decorators import retry, capture_locals, fallback
+from pyerror.circuit_breaker import circuit_breaker, CircuitOpenError
+from pyerror.wizard import debug_wizard
 from pyerror.factory import create
 from pyerror.comparison import compare
 from pyerror.analytics import get_analytics, clear_analytics
@@ -38,9 +40,13 @@ __all__ = [
     "to_json",
     "inspect_last_error",
     "ignore",
+    "capture_scope",
     "retry",
     "capture_locals",
     "fallback",
+    "circuit_breaker",
+    "CircuitOpenError",
+    "debug_wizard",
     "create",
     "compare",
     "get_analytics",

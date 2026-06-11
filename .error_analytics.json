@@ -1,10 +1,34 @@
 {
-  "KeyError: 'missing' (@ test_pyerror.py:162 in test_recording)": {
+  "KeyError: 'missing' (@ test_pyerror.py:163 in test_recording)": {
     "count": 1,
-    "first_seen": "2026-06-11T17:59:40.375398Z",
-    "last_seen": "2026-06-11T17:59:40.375398Z",
-    "location": "test_pyerror.py:162 in test_recording",
+    "first_seen": "2026-06-11T18:39:06.595141Z",
+    "last_seen": "2026-06-11T18:39:06.595141Z",
+    "location": "test_pyerror.py:163 in test_recording",
     "type": "KeyError",
     "message": "'missing'"
+  },
+  "ValueError: test (@ unknown)": {
+    "count": 1,
+    "first_seen": "2026-06-11T18:39:06.595141Z",
+    "last_seen": "2026-06-11T18:39:06.595141Z",
+    "location": "unknown",
+    "type": "ValueError",
+    "message": "test"
+  },
+  "ValueError: fastapi route failure (@ test_pyerror.py:565 in mock_call_next)": {
+    "count": 1,
+    "first_seen": "2026-06-11T18:39:06.694960Z",
+    "last_seen": "2026-06-11T18:39:06.694960Z",
+    "location": "test_pyerror.py:565 in mock_call_next",
+    "type": "ValueError",
+    "message": "fastapi route failure"
+  },
+  "ValueError: flask route failure (@ unknown)": {
+    "count": 1,
+    "first_seen": "2026-06-11T18:39:06.694960Z",
+    "last_seen": "2026-06-11T18:39:06.694960Z",
+    "location": "unknown",
+    "type": "ValueError",
+    "message": "flask route failure"
   }
 }

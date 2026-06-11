@@ -70,6 +70,15 @@ NameError: name 'x' is not defined
 >>> pyerror.inspect_last_error() # Prints humanized report panel for NameError
 ```
 
+#### `pyerror.debug_wizard()`
+Launches an interactive, text-based CLI debug wizard in your REPL/console session to troubleshoot the last active or thrown exception. It prompts you with options to translate the error, inspect captured local variables, generate sharing links, write markdown reports, or launch `pdb` for post-mortem debugging.
+```python
+>>> import pyerror
+>>> raise ValueError("Invalid config")
+>>> pyerror.debug_wizard()
+# Launches interactive triage menu console
+```
+
 ---
 
 ### 2. Diagnostics & On-Demand Analysis
@@ -156,6 +165,24 @@ def load_config():
 print(load_config()) # Returns: {}
 ```
 
+#### `@pyerror.circuit_breaker(failure_threshold=5, recovery_timeout=60.0, exceptions=Exception)`
+A decorator implementing the Circuit Breaker pattern. It tracks consecutive failures raised by the decorated function.
+*   `failure_threshold`: Number of consecutive failures before the circuit opens.
+*   `recovery_timeout`: Cooldown period in seconds before transitioning to half-open.
+*   `exceptions`: Tuple of exception types that trigger failure tracking.
+Once opened, subsequent calls instantly raise `pyerror.CircuitOpenError` without running the function. After the recovery timeout, it transitions to half-open, running a canary call to check health.
+```python
+@pyerror.circuit_breaker(failure_threshold=3, recovery_timeout=30.0, exceptions=(ValueError,))
+def call_unstable_api():
+    raise ValueError("API is down")
+
+# After 3 failed calls, the circuit opens:
+try:
+    call_unstable_api()
+except pyerror.CircuitOpenError as exc:
+    print("Circuit is currently open, call was blocked.")
+```
+
 ---
 
 ### 4. Context Managers
@@ -167,6 +194,19 @@ import os
 # Ignores FileNotFoundError if file is already deleted
 with pyerror.ignore(FileNotFoundError):
     os.remove("nonexistent.txt")
+```
+
+#### `pyerror.capture_scope()`
+A block-level context manager that captures all local variables initialized or modified inside a code block if an exception is raised. Variables matching secret names (like passwords, keys) are automatically masked. The captured dictionary is stored in `scope.locals` and attached to `exc.__captured_locals__`.
+```python
+try:
+    with pyerror.capture_scope() as scope:
+        db_user = "admin"
+        db_password = "my-secret-password"
+        result = 10 / 0
+except ZeroDivisionError as exc:
+    print(scope.locals)
+    # Output: {'db_user': "'admin'", 'db_password': '********', 'result': ...}
 ```
 
 ---

@@ -187,18 +187,66 @@ class Formatter:
             
         console = Console(color_system="truecolor", stderr=True)
         
+        # Retrieve configured theme dynamically
+        current_theme_name = "dark"
+        try:
+            from pyerror import core
+            current_theme_name = getattr(core, "_theme", "dark")
+        except ImportError:
+            pass
+
+        themes = {
+            "dark": {
+                "info": "bold cyan",
+                "warn": "bold yellow",
+                "error": "bold red",
+                "crit": "bold white on red",
+                "panel_expl": "cyan",
+                "panel_tb": "magenta",
+                "panel_sug": "green",
+            },
+            "light": {
+                "info": "bold blue",
+                "warn": "bold yellow",
+                "error": "bold red",
+                "crit": "bold black on red",
+                "panel_expl": "blue",
+                "panel_tb": "black",
+                "panel_sug": "green",
+            },
+            "nord": {
+                "info": "bold #88c0d0",
+                "warn": "bold #ebcb8b",
+                "error": "bold #bf616a",
+                "crit": "bold #d08770 on #bf616a",
+                "panel_expl": "#81a1c1",
+                "panel_tb": "#b48ead",
+                "panel_sug": "#a3be8c",
+            },
+            "monochrome": {
+                "info": "bold white",
+                "warn": "bold white",
+                "error": "bold white",
+                "crit": "bold white on black",
+                "panel_expl": "white",
+                "panel_tb": "white",
+                "panel_sug": "white",
+            }
+        }
+        theme_colors = themes.get(current_theme_name, themes["dark"])
+
         # Build Title/Severity style
         severity = "ERROR"
         if hasattr(exc, "__severity__"):
             severity = str(exc.__severity__).upper()
             
         severity_colors = {
-            "INFO": "bold cyan",
-            "WARNING": "bold yellow",
-            "ERROR": "bold red",
-            "CRITICAL": "bold white on red"
+            "INFO": theme_colors["info"],
+            "WARNING": theme_colors["warn"],
+            "ERROR": theme_colors["error"],
+            "CRITICAL": theme_colors["crit"]
         }
-        color = severity_colors.get(severity, "bold red")
+        color = severity_colors.get(severity, theme_colors["error"])
         
         title_text = Text(f"[{severity}] {details['name']}: {details['message']}", style=color)
         
@@ -208,7 +256,7 @@ class Formatter:
             explanation_content,
             title="💡 Error Intelligence",
             title_align="left",
-            border_style="cyan",
+            border_style=theme_colors["panel_expl"],
             padding=(1, 2)
         )
         
@@ -260,7 +308,7 @@ class Formatter:
             traceback_table,
             title="🔍 Traceback (Filtered)" if mode in ("beginner", "compact") else "🔍 Complete Traceback",
             title_align="left",
-            border_style="magenta",
+            border_style=theme_colors["panel_tb"],
             padding=(1, 2)
         )
         
@@ -273,7 +321,7 @@ class Formatter:
             sug_content,
             title="🛠️ Actionable Suggestions",
             title_align="left",
-            border_style="green",
+            border_style=theme_colors["panel_sug"],
             padding=(1, 2)
         )
         
