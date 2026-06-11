@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>error - Shared Exception Viewer</title>
+    <!-- Import Google Fonts (Outfit and JetBrains Mono) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <!-- Pako Zlib library for decompression -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0b0f19;
+            --bg-secondary: rgba(17, 24, 39, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --primary: #ef4444;
+            --primary-bg: rgba(239, 68, 68, 0.1);
+            --cyan-primary: #06b6d4;
+            --cyan-bg: rgba(6, 182, 212, 0.1);
+            --green-primary: #22c55e;
+            --green-bg: rgba(34, 197, 94, 0.1);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(239, 68, 68, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.05) 0px, transparent 50%);
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: var(--bg-secondary);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+            margin-bottom: 24px;
+        }
+
+        .severity-badge {
+            background: var(--primary-bg);
+            color: var(--primary);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.85em;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .logo {
+            font-weight: 800;
+            font-size: 1.5em;
+            color: var(--text-main);
+        }
+
+        .logo span {
+            color: var(--primary);
+        }
+
+        .error-title {
+            font-size: 1.6em;
+            font-weight: 700;
+            margin: 0 0 12px 0;
+            color: #ffffff;
+        }
+
+        .error-message {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: #fca5a5;
+            font-size: 0.95em;
+            margin-bottom: 24px;
+            overflow-x: auto;
+        }
+
+        .section-card {
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid transparent;
+        }
+
+        .explanation-card {
+            background: var(--cyan-bg);
+            border-color: rgba(6, 182, 212, 0.2);
+        }
+
+        .explanation-card h3 {
+            color: var(--cyan-primary);
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            font-size: 1.1em;
+        }
+
+        .suggestions-card {
+            background: var(--green-bg);
+            border-color: rgba(34, 197, 94, 0.2);
+        }
+
+        .suggestions-card h3 {
+            color: var(--green-primary);
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            font-size: 1.1em;
+        }
+
+        .suggestions-card ul {
+            padding-left: 20px;
+            margin: 0;
+        }
+
+        .suggestions-card li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .traceback-card {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .traceback-card h3 {
+            margin-top: 0;
+            color: #ffffff;
+            font-size: 1.1em;
+        }
+
+        .frame {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+
+        .frame-header {
+            font-size: 0.85em;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+        }
+
+        .frame-header span {
+            color: #818cf8;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .frame-code {
+            background: #0d1117;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+            overflow-x: auto;
+            color: #f8f8f2;
+        }
+
+        .error-help {
+            text-align: center;
+            color: var(--text-muted);
+            padding: 40px 0;
+        }
+
+        .error-help h2 {
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 0.8em;
+            color: var(--text-muted);
+        }
+
+        .footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container" id="app">
+        <!-- Dynamic loading states will render here -->
+        <div class="error-help">
+            <h2>Loading Shared Exception Report...</h2>
+            <p>Decoding and decompressing the exception payload.</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const app = document.getElementById("app");
+            
+            // 1. Get raw base64 data parameter from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const dataParam = urlParams.get("data");
+
+            if (!dataParam) {
+                app.innerHTML = `
+                    <div class="error-help">
+                        <div class="logo">🧠 <span>error</span></div>
+                        <h2>No Exception Data Provided</h2>
+                        <p>This viewer is designed to display self-contained exception reports shared from the <b>error</b> python package.</p>
+                        <p style="margin-top: 20px; font-size: 0.9em;">Use <code>error.generate_share_link(exc)</code> to create sharing links.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                // 2. Decode URL-safe base64 and decompress using pako
+                const base64Str = dataParam.replace(/-/g, "+").replace(/_/g, "/");
+                const binaryString = atob(base64Str);
+                const charData = binaryString.split('').map(x => x.charCodeAt(0));
+                const binData = new Uint8Array(charData);
+                
+                // Inflate raw zlib bytes
+                const decompressedStr = pako.inflate(binData, { to: 'string' });
+                const payload = JSON.parse(decompressedStr);
+
+                // 3. Render payload details
+                let tracebackHtml = "";
+                if (payload.traceback && payload.traceback.length > 0) {
+                    payload.traceback.forEach(f => {
+                        tracebackHtml += `
+                            <div class="frame">
+                                <div class="frame-header">
+                                    File <span>${f.file}</span>, line <b>${f.line}</b>, in <b>${f.func}</b>
+                                </div>
+                                <div class="frame-code">
+                                    <code>${escapeHtml(f.code) || '# Source code not available'}</code>
+                                </div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    tracebackHtml = "<div style='color: var(--text-muted); font-style: italic;'>No traceback frames recorded.</div>";
+                }
+
+                let suggestionsList = "";
+                payload.suggestions.forEach(s => {
+                    suggestionsList += `<li>${escapeHtml(s)}</li>`;
+                });
+
+                app.innerHTML = `
+                    <header>
+                        <div class="logo">🧠 <span>error</span></div>
+                        <div class="severity-badge">Error Report</div>
+                    </header>
+
+                    <h1 class="error-title">${escapeHtml(payload.type)}</h1>
+                    <div class="error-message">${escapeHtml(payload.message)}</div>
+
+                    <div class="section-card explanation-card">
+                        <h3>💡 Explanation & Details</h3>
+                        <p style="margin: 0 0 10px 0; font-size: 1.05em; line-height: 1.5;">${escapeHtml(payload.translation)}</p>
+                        <p style="margin: 0; font-size: 0.95em; color: var(--text-muted); font-style: italic;"><b>Reason:</b> ${escapeHtml(payload.why)}</p>
+                    </div>
+
+                    <div class="section-card suggestions-card">
+                        <h3>🛠️ Actionable Suggestions</h3>
+                        <ul>
+                            ${suggestionsList}
+                        </ul>
+                    </div>
+
+                    <div class="traceback-card">
+                        <h3>🔍 Traceback</h3>
+                        ${tracebackHtml}
+                    </div>
+
+                    <div class="footer">
+                        Generated by <a href="https://github.com/Happy-Kumar-Sharma/error" target="_blank">error</a> python library.
+                    </div>
+                `;
+            } catch (err) {
+                app.innerHTML = `
+                    <div class="error-help" style="color: var(--primary);">
+                        <h2>⚠️ Failed to Decode Exception Report</h2>
+                        <p>The shared link might be broken or incomplete.</p>
+                        <p style="font-size: 0.85em; margin-top: 15px; color: var(--text-muted); font-family: monospace;">Details: ${escapeHtml(err.message)}</p>
+                    </div>
+                `;
+            }
+
+            function escapeHtml(str) {
+                if (!str) return "";
+                return str
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+        });
+    </script>
+</body>
+</html>
