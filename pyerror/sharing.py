@@ -33,6 +33,12 @@ def generate_share_link(exc: BaseException) -> str:
         "traceback": minified_frames
     }
 
+    # Add recent logs if available
+    from pyerror.logging_handler import get_recent_logs
+    recent_logs = get_recent_logs()
+    if recent_logs:
+        payload["recent_logs"] = recent_logs
+
     try:
         # Encode JSON to bytes, compress using zlib, base64 encode
         json_bytes = json.dumps(payload).encode("utf-8")

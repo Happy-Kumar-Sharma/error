@@ -14,7 +14,7 @@ from pyerror.core import (
     inspect_last_error,
 )
 from pyerror.context import ignore, capture_scope
-from pyerror.decorators import retry, capture_locals, fallback
+from pyerror.decorators import retry, capture_locals, fallback, self_healing
 from pyerror.circuit_breaker import circuit_breaker, CircuitOpenError
 from pyerror.wizard import debug_wizard
 from pyerror.factory import create
@@ -26,8 +26,13 @@ from pyerror.testing import assert_readable, assert_not_exposed
 from pyerror.integrations import configure_integrations, notify_slack, notify_sentry, send_email
 from pyerror.system_info import get_system_info
 from pyerror.frameworks import register_flask_error_handler, FastAPIErrorMiddleware
+from pyerror.logging_handler import integrate_logging
+from pyerror.formatting import Formatter
 
-__version__ = "0.1.0"
+add_scrub_pattern = Formatter.add_scrub_pattern
+add_scrub_callback = Formatter.add_scrub_callback
+
+__version__ = "0.1.2"
 
 __all__ = [
     "configure",
@@ -44,6 +49,7 @@ __all__ = [
     "retry",
     "capture_locals",
     "fallback",
+    "self_healing",
     "circuit_breaker",
     "CircuitOpenError",
     "debug_wizard",
@@ -62,4 +68,7 @@ __all__ = [
     "get_system_info",
     "register_flask_error_handler",
     "FastAPIErrorMiddleware",
+    "integrate_logging",
+    "add_scrub_pattern",
+    "add_scrub_callback",
 ]

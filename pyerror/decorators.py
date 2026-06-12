@@ -112,3 +112,38 @@ def fallback(
                 return default
         return wrapper
     return decorator
+
+def self_healing(
+    handler: Callable[[BaseException], Any],
+    exceptions: Union[Type[BaseException], Tuple[Type[BaseException], ...]] = (Exception,)
+):
+    """
+    Decorator that intercepts targeted exceptions, runs an auto-recovery handler,
+    and retries the operation exactly once.
+    """
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs) -> Any:
+            try:
+                return func(*args, **kwargs)
+            except exceptions as e:
+                sys.stderr.write(
+                    f"⚠️ [pyerror.self_healing] Intercepted {type(e).__name__}. Running recovery handler...\n"
+                )
+                sys.stderr.flush()
+                try:
+                    handler(e)
+                except Exception as recovery_err:
+                    sys.stderr.write(
+                        f"⚠️ [pyerror.self_healing] Recovery handler raised an error: {recovery_err}. Aborting retry.\n"
+                    )
+                    sys.stderr.flush()
+                    raise e
+                
+                # Retry once
+                sys.stderr.write("⚠️ [pyerror.self_healing] Retrying execution...\n")
+                sys.stderr.flush()
+                return func(*args, **kwargs)
+        return wrapper
+    return decorator
+

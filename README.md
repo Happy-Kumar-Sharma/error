@@ -52,6 +52,7 @@ Configures global library parameters:
 *   `mask_secrets`: `True` / `False` to enable local variable masking.
 *   `secret_keys`: list of keys to mask.
 *   `hide_packages`: list of package names (e.g. `["requests"]`) to filter out of traceback stacks.
+*   `git_blame`: `True` / `False` to enable git blame author attribution on user traceback frames.
 ```python
 pyerror.configure(
     traceback_mode="compact",
@@ -181,6 +182,19 @@ try:
     call_unstable_api()
 except pyerror.CircuitOpenError as exc:
     print("Circuit is currently open, call was blocked.")
+
+#### `@pyerror.self_healing(handler, exceptions=Exception)`
+Decorates a function to catch specified exceptions, invoke a custom recovery handler, and retry the function call exactly once.
+```python
+def recovery_handler(exc):
+    print("OAuth token expired, refreshing...")
+    refresh_oauth_token()
+
+@pyerror.self_healing(handler=recovery_handler, exceptions=(ExpiredTokenError,))
+def call_protected_api():
+    # triggers ExpiredTokenError on first try
+    pass
+```
 ```
 
 ---
@@ -229,6 +243,17 @@ raise DatabaseFailure(host="db.local")
 ---
 
 ### 6. Logging & Exporting Reports
+
+#### `pyerror.integrate_logging(max_tail_lines: int = 20)`
+Attaches a memory-bounded log aggregator handler (`pyerrorLogHandler`) to the Python root logger. It holds the last $N$ logs and embeds them automatically inside markdown reports, JSON tracebacks, and Jupyter HTML outputs when an exception occurs.
+```python
+import logging
+import pyerror
+
+pyerror.integrate_logging(max_tail_lines=15)
+logging.getLogger().info("User started computation")
+# Any crash after this point will include this log in JSON/HTML/Markdown outputs!
+```
 
 #### `pyerror.to_json(exc: BaseException) -> str`
 Serializes the exception type, message, translation, reasons, suggestions, and traceback frames (with scrubbed variables) into a structured JSON string.
@@ -317,8 +342,9 @@ app.add_middleware(pyerror.FastAPIErrorMiddleware)
 
 ### 9. Slack, Sentry, & Email Alerts
 
-#### `pyerror.configure_integrations(slack_webhook=None, sentry_dsn=None, email_config=None)`
-Sets up notification destinations for error routing:
+#### `pyerror.configure_integrations(slack_webhook=None, sentry_dsn=None, email_config=None, rate_limit_seconds=None)`
+Sets up notification destinations for error routing.
+*   `rate_limit_seconds`: window in seconds to suppress and debounce duplicate alerts. Aggregated counts are sent automatically when the rate limit window closes.
 ```python
 pyerror.configure_integrations(
     slack_webhook="https://hooks.slack.com/services/...",
@@ -330,7 +356,8 @@ pyerror.configure_integrations(
         "recipient": "admin@myproject.com",
         "username": "smtp-user",
         "password": "smtp-password"
-    }
+    },
+    rate_limit_seconds=300 # Debounce alerts for 5 minutes
 )
 ```
 
@@ -369,6 +396,18 @@ except Exception as exc:
 Registers a case-insensitive variable/text pattern. If any variable name in local snapshots or text in tracebacks matches the rule, it is replaced with `********`.
 ```python
 pyerror.add_privacy_rule("session_token")
+```
+
+#### `pyerror.add_scrub_pattern(pattern: str, replacement: str = "********")`
+Adds a custom regular expression and replacement string to scrub sensitive data (like SSNs, credit cards, or internal user names) from tracebacks.
+```python
+pyerror.add_scrub_pattern(r"\b\d{3}-\d{2}-\d{4}\b", "[SSN-MASKED]")
+```
+
+#### `pyerror.add_scrub_callback(callback: Callable[[str], str])`
+Registers a custom sanitization function that takes a text block and returns the cleaned text block.
+```python
+pyerror.add_scrub_callback(lambda text: text.replace("DUMMY_SECRET", "CLEAN"))
 ```
 
 ---
@@ -414,6 +453,7 @@ Configure settings anytime using `pyerror.configure(...)`.
 | `mask_secrets` | `bool` | `True` | Automatically mask password/token variables in local snapshots. |
 | `secret_keys` | `list` | `[...]` | Custom variable names to mask (case-insensitive substring match). |
 | `hide_packages` | `list` | `[]` | List of package names to filter out of traceback stacks. |
+| `git_blame` | `bool` | `False` | Run git blame on user traceback frames to identify author, commit, and date details. |
 
 ---
 

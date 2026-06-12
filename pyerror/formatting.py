@@ -3,6 +3,7 @@ import sys
 import traceback
 import json
 import re
+import subprocess
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -23,6 +24,85 @@ from pyerror.suggestions import SuggestionEngine
 
 class Formatter:
     DEFAULT_SECRETS = ["password", "token", "secret", "key", "auth", "credential", "pwd", "pass", "ssn", "credit"]
+    _custom_scrub_patterns = []
+    _custom_scrub_callbacks = []
+    _git_blame_cache = {}
+
+    @classmethod
+    def add_scrub_pattern(cls, pattern: str, replacement: str = "********") -> None:
+        """Registers a custom regular expression pattern to scrub from text."""
+        cls._custom_scrub_patterns.append((pattern, replacement))
+
+    @classmethod
+    def add_scrub_callback(cls, callback: Any) -> None:
+        """Registers a custom callback function that sanitizes text."""
+        cls._custom_scrub_callbacks.append(callback)
+
+    @classmethod
+    def get_git_blame(cls, filename: str, lineno: int) -> Optional[Dict[str, str]]:
+        """Queries git blame to get the commit author, hash, and date for a file line."""
+        if not filename or not os.path.isfile(filename):
+            return None
+        
+        cache_key = (filename, lineno)
+        if cache_key in cls._git_blame_cache:
+            return cls._git_blame_cache[cache_key]
+
+        try:
+            file_dir = os.path.dirname(os.path.abspath(filename))
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+            proc = subprocess.run(
+                ["git", "blame", "-L", f"{lineno},{lineno}", "--porcelain", os.path.basename(filename)],
+                cwd=file_dir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                startupinfo=startupinfo,
+                timeout=2
+            )
+            if proc.returncode != 0:
+                cls._git_blame_cache[cache_key] = None
+                return None
+            
+            lines = proc.stdout.splitlines()
+            if not lines:
+                cls._git_blame_cache[cache_key] = None
+                return None
+                
+            header_parts = lines[0].split()
+            commit_hash = header_parts[0][:8] if header_parts else "unknown"
+            
+            author = "unknown"
+            author_mail = ""
+            author_time = ""
+            for line in lines[1:]:
+                if line.startswith("author "):
+                    author = line[7:]
+                elif line.startswith("author-mail "):
+                    author_mail = line[12:]
+                elif line.startswith("author-time "):
+                    author_time = line[12:]
+                    
+            if author_time.isdigit():
+                date_str = datetime.fromtimestamp(int(author_time)).strftime("%Y-%m-%d")
+            else:
+                date_str = "unknown"
+                
+            blame_info = {
+                "commit": commit_hash,
+                "author": author,
+                "email": author_mail,
+                "date": date_str
+            }
+            cls._git_blame_cache[cache_key] = blame_info
+            return blame_info
+        except Exception:
+            cls._git_blame_cache[cache_key] = None
+            return None
 
     @classmethod
     def scrub_text(cls, text: str, secret_keys: List[str] = None) -> str:
@@ -30,6 +110,20 @@ class Formatter:
         if not text:
             return text
         
+        if hasattr(cls, "_custom_scrub_callbacks"):
+            for cb in cls._custom_scrub_callbacks:
+                try:
+                    text = cb(text)
+                except Exception:
+                    pass
+
+        if hasattr(cls, "_custom_scrub_patterns"):
+            for pattern, replacement in cls._custom_scrub_patterns:
+                try:
+                    text = re.sub(pattern, replacement, text)
+                except Exception:
+                    pass
+
         keys = secret_keys if secret_keys is not None else cls.DEFAULT_SECRETS
         
         # Scrub assignment values for matching keywords, e.g. password = "abc"
@@ -290,6 +384,20 @@ class Formatter:
             
             traceback_table.add_row(location, syntax_line or "<no source code>")
             
+            # Check if git blame is enabled
+            git_blame_enabled = False
+            try:
+                from pyerror import core
+                git_blame_enabled = getattr(core, "_git_blame", False)
+            except ImportError:
+                pass
+                
+            if git_blame_enabled:
+                blame = cls.get_git_blame(f["filename"], f["lineno"])
+                if blame:
+                    blame_text = f"[Git Blame]: {blame['author']} ({blame['email']}) | Commit: {blame['commit']} | Date: {blame['date']}"
+                    traceback_table.add_row("", Text(blame_text, style="dim italic yellow"))
+            
             # Show locals for each displayed frame in full mode, or for the active frame in compact mode
             show_locals = (mode == "full") or (mode == "compact" and f == frames_to_display[-1])
             if show_locals and f["locals"]:
@@ -373,6 +481,19 @@ class Formatter:
             if f["code_line"]:
                 lines.append(f"    {f['code_line']}")
             
+            # Check if git blame is enabled
+            git_blame_enabled = False
+            try:
+                from pyerror import core
+                git_blame_enabled = getattr(core, "_git_blame", False)
+            except ImportError:
+                pass
+                
+            if git_blame_enabled:
+                blame = cls.get_git_blame(f["filename"], f["lineno"])
+                if blame:
+                    lines.append(f"    [Git Blame]: {blame['author']} ({blame['email']}) | Commit: {blame['commit']} | Date: {blame['date']}")
+            
             show_locals = (mode == "full") or (mode == "compact" and f == frames_to_display[-1])
             if show_locals and f["locals"]:
                 masked_l = cls.mask_locals(f["locals"], mask_secrets, secret_keys)
@@ -425,6 +546,13 @@ class Formatter:
             "suggestions": details["suggestions"],
             "traceback": serialized_frames
         }
+        
+        # Include recent logs if any
+        from pyerror.logging_handler import get_recent_logs
+        recent_logs = get_recent_logs()
+        if recent_logs:
+            payload["recent_logs"] = recent_logs
+
         return json.dumps(payload, indent=2)
 
     @classmethod
@@ -486,6 +614,23 @@ class Formatter:
         # Assemble suggestions
         sug_items = "".join(f"<li style='margin-bottom: 6px;'>{s}</li>" for s in details["suggestions"])
         
+        # Assemble recent logs HTML if available
+        from pyerror.logging_handler import get_recent_logs
+        recent_logs = get_recent_logs()
+        logs_block = ""
+        if recent_logs:
+            log_lines = "".join(f"<div style='margin-bottom: 4px; font-family: monospace; font-size: 0.85em; white-space: pre-wrap;'>{log}</div>" for log in recent_logs)
+            logs_block = f"""
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px; margin-bottom: 16px;">
+                <div style="font-weight: bold; color: #475569; font-size: 0.95em; margin-bottom: 8px; display: flex; align-items: center;">
+                    <span style="margin-right: 6px;">📝</span> Recent Application Logs
+                </div>
+                <div style="color: #334155; font-size: 0.9em; max-height: 200px; overflow-y: auto;">
+                    {log_lines}
+                </div>
+            </div>
+            """
+
         example_block = ""
         if details["example"]:
             example_block = f"""
@@ -556,6 +701,7 @@ class Formatter:
             </details>
 
             <!-- Suggestions Panel -->
+            {logs_block}
             <div style="background: #f0fdf4; border: 1px solid #dcfce7; border-radius: 6px; padding: 14px;">
                 <div style="font-weight: bold; color: #16a34a; font-size: 0.95em; margin-bottom: 8px; display: flex; align-items: center;">
                     <span style="margin-right: 6px;">🛠️</span> Actionable Suggestions

@@ -12,6 +12,7 @@ _mask_secrets = True
 _secret_keys = Formatter.DEFAULT_SECRETS.copy()
 _hide_packages = []
 _theme = "dark" # dark, light, nord, monochrome
+_git_blame = False
 _original_excepthook = sys.excepthook
 
 class DiagnosticsResult:
@@ -57,9 +58,10 @@ def configure(
     secret_keys: Optional[List[str]] = None,
     hide_packages: Optional[List[str]] = None,
     theme: Optional[str] = None,
+    git_blame: Optional[bool] = None,
 ):
     """Configures global error library settings."""
-    global _traceback_mode, _mask_secrets, _secret_keys, _hide_packages, _theme
+    global _traceback_mode, _mask_secrets, _secret_keys, _hide_packages, _theme, _git_blame
     if traceback_mode is not None:
         if traceback_mode not in ("beginner", "compact", "full", "production"):
             raise ValueError("traceback_mode must be one of: 'beginner', 'compact', 'full', 'production'")
@@ -74,6 +76,8 @@ def configure(
         if theme not in ("dark", "light", "nord", "monochrome"):
             raise ValueError("theme must be one of: 'dark', 'light', 'nord', 'monochrome'")
         _theme = theme
+    if git_blame is not None:
+        _git_blame = git_blame
 
 def add_privacy_rule(pattern: str):
     """Adds a custom string key to the list of secret keys to mask."""

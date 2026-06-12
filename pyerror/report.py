@@ -81,6 +81,22 @@ def generate_markdown_report(exc: BaseException, file_path: Optional[str] = None
             report_lines.append(f"| `{k}` | `{v}` |")
         report_lines.append("")
         
+    # Check for recent application logs
+    from pyerror.logging_handler import get_recent_logs
+    recent_logs = get_recent_logs()
+    if recent_logs:
+        report_lines.extend([
+            "## 📝 Recent Application Logs",
+            "",
+            "```text"
+        ])
+        for log in recent_logs:
+            report_lines.append(log)
+        report_lines.extend([
+            "```",
+            ""
+        ])
+
     report_content = "\n".join(report_lines)
     
     if file_path:

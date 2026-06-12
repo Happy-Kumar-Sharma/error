@@ -574,6 +574,10 @@ class TestCoverageExpansion(unittest.TestCase):
             importlib.reload(pyerror.frameworks)
 
     def test_integrations_alert_triggers(self):
+        from pyerror import integrations
+        integrations._rate_limit_seconds = None
+        integrations._alert_history.clear()
+        integrations._alert_suppressed_counts.clear()
         pyerror.configure_integrations(
             slack_webhook="https://hooks.slack.com/services/test",
             sentry_dsn="https://test@sentry.io/1",
@@ -600,6 +604,158 @@ class TestCoverageExpansion(unittest.TestCase):
             self.assertTrue(mock_urlopen.called)
             self.assertTrue(mock_sentry_sdk.capture_exception.called)
             self.assertTrue(mock_smtp.called)
+
+class TestAdvancedFeatures(unittest.TestCase):
+    def test_alert_rate_limiting_slack(self):
+        from pyerror import integrations
+        pyerror.configure_integrations(
+            slack_webhook="https://hooks.slack.com/services/test",
+            rate_limit_seconds=10
+        )
+        
+        # Reset rate limit states manually to ensure clean test
+        integrations._alert_history.clear()
+        integrations._alert_suppressed_counts.clear()
+
+        try:
+            raise ValueError("test rate limit")
+        except ValueError as e:
+            exc = e
+
+        with patch("urllib.request.urlopen") as mock_urlopen:
+            # First call: triggers webhook
+            mock_urlopen.return_value.__enter__.return_value.status = 200
+            res1 = pyerror.notify_slack(exc)
+            self.assertTrue(res1)
+            self.assertEqual(mock_urlopen.call_count, 1)
+
+            # Second call (immediate duplicate): gets suppressed
+            res2 = pyerror.notify_slack(exc)
+            self.assertFalse(res2)
+            self.assertEqual(mock_urlopen.call_count, 1)
+            
+            # Fast-forward time manually by modifying history timestamp
+            sig = integrations._get_exception_signature(exc)
+            integrations._alert_history[sig] -= 15
+
+            # Third call: triggers webhook and includes duplicate message
+            res3 = pyerror.notify_slack(exc)
+            self.assertTrue(res3)
+            self.assertEqual(mock_urlopen.call_count, 2)
+            
+            # Verify body payload passed to urllib request includes the suppressed warning
+            call_args = mock_urlopen.call_args[0][0]
+            payload_data = json.loads(call_args.data.decode("utf-8"))
+            self.assertIn("was suppressed 1 times", payload_data["blocks"][1]["text"]["text"])
+
+        # Reset rate limit seconds
+        pyerror.configure_integrations(rate_limit_seconds=None)
+
+    def test_git_blame_attribution(self):
+        pyerror.configure(git_blame=True)
+        
+        # Mock git blame porcelain output
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.stdout = (
+            "a1b2c3d4 1 1 1\n"
+            "author Test Author\n"
+            "author-mail <test@author.com>\n"
+            "author-time 1776268800\n"
+        )
+        
+        try:
+            raise ValueError("test blame")
+        except ValueError as e:
+            exc = e
+
+        with patch("subprocess.run", return_value=mock_proc):
+            rendered = Formatter.format_cli(exc)
+            self.assertIn("Test Author", rendered)
+            self.assertIn("test@author.com", rendered)
+            self.assertIn("a1b2c3d4", rendered)
+
+            plain_rendered = Formatter._format_cli_plain(exc, SuggestionEngine.get_details(exc), Formatter.extract_frames(exc), "full", True, [])
+            self.assertIn("[Git Blame]: Test Author (<test@author.com>) | Commit: a1b2c3d4", plain_rendered)
+
+        pyerror.configure(git_blame=False)
+
+    def test_contextual_log_aggregation(self):
+        import logging
+        from pyerror.logging_handler import get_recent_logs
+        
+        from pyerror import logging_handler
+        pyerror.integrate_logging(max_tail_lines=5)
+        
+        # Clear log history for clean state
+        if logging_handler._global_handler:
+            logging_handler._global_handler.clear()
+
+        test_logger = logging.getLogger("test_pyerror_logger")
+        test_logger.warning("Confidential test event message")
+
+        recent = get_recent_logs()
+        self.assertTrue(any("Confidential test event message" in log for log in recent))
+
+        try:
+            raise ValueError("test logs serialize")
+        except ValueError as e:
+            exc = e
+
+        # Test JSON serialization contains logs
+        serialized_json = pyerror.to_json(exc)
+        self.assertIn("Confidential test event message", serialized_json)
+
+        # Test HTML representation contains logs
+        html = Formatter.format_jupyter_html(exc)
+        self.assertIn("Confidential test event message", html)
+        self.assertIn("Recent Application Logs", html)
+
+        # Clean up
+        if logging_handler._global_handler:
+            logging_handler._global_handler.clear()
+
+    def test_custom_pii_sanitization(self):
+        pyerror.add_scrub_pattern(r"MY_SECRET_KEY_\d+", "[SCRUBBED_KEY]")
+        pyerror.add_scrub_callback(lambda text: text.replace("UNSAFE_VALUE", "SAFE_VALUE"))
+
+        res = Formatter.scrub_text("This is MY_SECRET_KEY_123 and UNSAFE_VALUE")
+        self.assertEqual(res, "This is [SCRUBBED_KEY] and SAFE_VALUE")
+
+    def test_self_healing_decorator(self):
+        recovery_runs = 0
+        def my_recovery(exc):
+            nonlocal recovery_runs
+            recovery_runs += 1
+
+        calls = 0
+        @pyerror.self_healing(handler=my_recovery, exceptions=(ValueError,))
+        def unstable_action():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise ValueError("transient error")
+            return "ok"
+
+        with patch("sys.stderr.write"):
+            result = unstable_action()
+            self.assertEqual(result, "ok")
+            self.assertEqual(calls, 2)
+            self.assertEqual(recovery_runs, 1)
+
+        # Healing handler raises exception: retry is aborted
+        def failing_recovery(exc):
+            raise RuntimeError("recovery failed")
+
+        calls_fail = 0
+        @pyerror.self_healing(handler=failing_recovery, exceptions=(ValueError,))
+        def action_fail():
+            nonlocal calls_fail
+            calls_fail += 1
+            raise ValueError("bad error")
+
+        with patch("sys.stderr.write"), self.assertRaises(ValueError):
+            action_fail()
 
 if __name__ == "__main__":
     unittest.main()
