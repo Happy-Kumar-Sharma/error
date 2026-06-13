@@ -174,7 +174,7 @@ class AnalyticsTracker:
         """Groups and records an exception occurrence."""
         exc_type = type(exc).__name__
         exc_msg = str(exc)
-        
+
         # Determine the location signature (last frame in traceback)
         location = "unknown"
         tb = exc.__traceback__
@@ -183,7 +183,7 @@ class AnalyticsTracker:
             last_frame = tb
             while last_frame.tb_next:
                 last_frame = last_frame.tb_next
-            
+
             filename = os.path.basename(last_frame.tb_frame.f_code.co_filename)
             lineno = last_frame.tb_lineno
             func_name = last_frame.tb_frame.f_code.co_name
@@ -193,9 +193,26 @@ class AnalyticsTracker:
         signature = f"{exc_type}: {exc_msg} (@ {location})"
         now_str = datetime.utcnow().isoformat() + "Z"
 
+        fp = ""
+        try:
+            from pyerror.otel import fingerprint as _fp
+            fp = _fp(exc)
+        except Exception:
+            pass
+
+        global _SAMPLING_RATE, _SAMPLING_THRESHOLD, _RELEASE
+        sampled = False
         if signature in self.data:
-            self.data[signature]["count"] += 1
-            self.data[signature]["last_seen"] = now_str
+            entry = self.data[signature]
+            entry["count"] += 1
+            entry["last_seen"] = now_str
+            if _SAMPLING_RATE > 1 and entry["count"] > _SAMPLING_THRESHOLD:
+                sampled = (entry["count"] % _SAMPLING_RATE) != 0
+            if fp:
+                entry.setdefault("fingerprint", fp)
+            if _RELEASE:
+                entry.setdefault("release", _RELEASE)
+            entry["sampled"] = sampled
         else:
             self.data[signature] = {
                 "count": 1,
@@ -203,7 +220,10 @@ class AnalyticsTracker:
                 "last_seen": now_str,
                 "location": location,
                 "type": exc_type,
-                "message": exc_msg
+                "message": exc_msg,
+                "fingerprint": fp,
+                "release": _RELEASE,
+                "sampled": False,
             }
         self._save()
 
@@ -219,6 +239,52 @@ class AnalyticsTracker:
                 os.remove(self.filename)
             except Exception:
                 pass
+
+# Sampling + release configuration
+_SAMPLING_RATE = 1
+_SAMPLING_THRESHOLD = 20
+_RELEASE: Optional[str] = None
+
+
+def set_sampling(rate: int, threshold: int = 20):
+    """Capture only 1-in-`rate` occurrences past `threshold` per signature.
+
+    Counts are always truthful — sampling only flags whether a record's
+    expensive downstream side-effects (e.g. notifier fan-out) should fire.
+    """
+    global _SAMPLING_RATE, _SAMPLING_THRESHOLD
+    _SAMPLING_RATE = max(1, int(rate))
+    _SAMPLING_THRESHOLD = max(0, int(threshold))
+
+
+def set_release(version: Optional[str] = None) -> Optional[str]:
+    """Stamp every new record with a release tag (string or git short SHA)."""
+    global _RELEASE
+    if version is not None:
+        _RELEASE = str(version)
+        return _RELEASE
+    env = os.environ.get("PYERROR_RELEASE")
+    if env:
+        _RELEASE = env
+        return _RELEASE
+    try:
+        import subprocess
+        out = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL, timeout=1
+        )
+        _RELEASE = out.decode("utf-8").strip() or None
+    except Exception:
+        _RELEASE = None
+    return _RELEASE
+
+
+def releases_summary() -> Dict[str, int]:
+    summary: Dict[str, int] = {}
+    for record in _tracker.data.values():
+        rel = record.get("release") or "unknown"
+        summary[rel] = summary.get(rel, 0) + record.get("count", 1)
+    return summary
+
 
 # Global instance
 _tracker = AnalyticsTracker()

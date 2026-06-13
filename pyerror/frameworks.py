@@ -27,7 +27,14 @@ def register_flask_error_handler(app: Any):
             log_error(e)
         except Exception:
             pass
-            
+
+        # Mirror diagnostics onto the active OpenTelemetry span, if any
+        try:
+            from pyerror import otel
+            otel.record_exception(e)
+        except Exception:
+            pass
+
         # Send integration notifications
         try:
             from pyerror.integrations import notify_slack, notify_sentry, send_email
@@ -62,7 +69,14 @@ try:
                     log_error(exc)
                 except Exception:
                     pass
-                    
+
+                # Mirror diagnostics onto the active OpenTelemetry span, if any
+                try:
+                    from pyerror import otel
+                    otel.record_exception(exc)
+                except Exception:
+                    pass
+
                 # Send integration notifications
                 try:
                     from pyerror.integrations import notify_slack, notify_sentry, send_email

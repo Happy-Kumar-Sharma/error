@@ -443,6 +443,220 @@ class TestSecurity(unittest.TestCase):
 
 ---
 
+### 12. Fuzzy "Did you mean?" Suggestions
+
+Typo-aware suggestions for `NameError`, `AttributeError`, `KeyError`, and `ImportError` are built into every output path (`suggest()`, `explain()`, humanized tracebacks, JSON). They match the failing name against everything actually in scope at the crash site — no configuration needed.
+
+```python
+config = {"db_host": "localhost", "db_port": 5432}
+config["db_hots"]
+# Suggestion: Did you mean key 'db_host' (found in `config`) instead of 'db_hots'?
+
+import PIL
+# Suggestion: `PIL` is installed via `pip install Pillow` (the import name differs from the package name).
+```
+
+You can also call the engine directly:
+```python
+suggestions = pyerror.suggest_names(exc)  # list[str], never raises
+```
+
+---
+
+### 13. OpenTelemetry Integration
+
+Attach pyerror's humanized diagnostics (translation, suggestions, scrubbed locals, fingerprint) to the active OTel span — visible in Jaeger, Tempo, Datadog, Honeycomb, etc. Requires the optional extra:
+
+```bash
+pip install pyerror-intel[otel]
+```
+
+```python
+import pyerror
+
+pyerror.otel.instrument()  # once at startup
+
+@pyerror.otel.traced()
+def charge_card(order_id):
+    ...
+```
+
+The excepthook, Flask handler, and FastAPI middleware automatically enrich the current span when an exception is recorded — no extra wiring needed. Every call degrades to a silent no-op when OpenTelemetry is not installed.
+
+#### `pyerror.fingerprint(exc) -> str`
+Stable 16-char grouping hash built from exception type + normalized message (hex addresses, IDs, UUIDs, and paths stripped) + crash location. Two crashes of the same bug with different user IDs fingerprint identically — use it to cluster recurrences.
+
+---
+
+### 14. AI-Powered Explanations (`pyerror.ai_explain`)
+
+Optional LLM-powered explanation and fix suggestion. Strictly opt-in: nothing is ever sent anywhere unless you call it yourself with a key (or run a local model via Ollama). All context passes through pyerror's scrubbing pipeline first, and captured locals are excluded unless you pass `include_locals=True`.
+
+```python
+try:
+    risky()
+except Exception as exc:
+    result = pyerror.ai_explain(exc)                                # uses ANTHROPIC_API_KEY
+    result = pyerror.ai_explain(exc, provider="openai")             # uses OPENAI_API_KEY
+    result = pyerror.ai_explain(exc, provider="ollama", model="llama3.2")  # fully local
+    result.show()
+    print(result.fix_code)
+```
+
+Returns a structured `AIExplanation` (`explanation`, `root_cause`, `fix_code`, `suggestions`, `confidence`). Raises `pyerror.AIProviderError` on failure so you can fall back to the built-in rule-based `pyerror.explain()`. Zero new dependencies — stdlib `urllib` only.
+
+---
+
+## 🚀 v0.2.0 — The 50-Feature Release
+
+### CLI (`pyerror …`)
+
+```bash
+pyerror run script.py [args...]    # humanized errors, persists last_error.json
+pyerror report last                 # show the saved last error
+pyerror analytics [--clear]         # recurring-error table
+pyerror watch script.py             # re-run on file save
+pyerror doctor                      # environment sanity check
+pyerror lookup ZeroDivisionError    # offline error encyclopedia
+pyerror serve --port 8765           # tiny Flask dashboard
+pyerror shellhook --shell powershell
+```
+
+### Intelligence
+
+- **`pyerror.suggest_fix(exc)`** — unified diffs proposing the corrected line.
+- **`pyerror.cluster_errors()`** — fingerprint-grouped analytics clusters.
+- **`pyerror.learn(exc, note=...)` / `recall(exc)`** — local knowledge base.
+- **`pyerror.search_links(exc)`** — pre-filled Stack Overflow / GitHub search URLs.
+- **`pyerror.analyze_chain(exc)`** — confidence-ranked root cause for `raise … from …` chains.
+- **`pyerror.format_chain(exc)`** — render exception chains as a tree.
+- **`pyerror.smart_repr(value)`** — DataFrame/tensor-aware repr (shape + dtype, not value dumps).
+
+### Diagnostics depth
+
+- **`pyerror.flatten_async_tb(exc)`** + **`install_async_handler()`** — humanize asyncio task failures.
+- **`pyerror.install_thread_hooks()`** + **`@capture_subprocess_errors`** — recover worker exceptions.
+- **`with pyerror.timed_frames(): …`** — annotate exceptions with per-frame elapsed time.
+- **`pyerror.snapshot_top()` / `enable()`** — `tracemalloc` top allocations on `MemoryError`.
+- **`pyerror.humanize_warnings()` / `escalate([DeprecationWarning])`** — same treatment for warnings.
+
+### Resiliency
+
+```python
+@pyerror.timeout(seconds=5)
+def slow(): ...
+
+@pyerror.bulkhead(max_concurrent=4)
+def io_bound(): ...
+
+@pyerror.dead_letter()             # append failed calls to ~/.pyerror/dead_letters.jsonl
+def charge_card(order_id): ...
+
+@pyerror.retry_rate_limited(tries=5, max_wait=120)
+def call_api(): ...
+
+@pyerror.hedge(delay=0.1, max_hedges=1)
+def idempotent_read(): ...
+
+pyerror.show_breakers()            # status table of all registered breakers
+
+# Async variants — table stakes for FastAPI:
+import pyerror
+@pyerror.aretry(tries=3)
+async def fetch(): ...
+@pyerror.atimeout(seconds=2)
+async def slow(): ...
+@pyerror.acircuit_breaker(failure_threshold=3)
+async def upstream(): ...
+
+# Retry with locals diffing — see what changed between attempt 1 and 3:
+@pyerror.retry(tries=3, diff_locals=True)
+def flaky(): ...
+```
+
+### Observability & production
+
+```python
+from pyerror import metrics, structured_logging, budgets
+metrics.instrument_analytics(); metrics.start_metrics_server(9464)
+structured_logging.log_exception(exc)           # JSON-lines event
+pyerror.set_budget(errors_per_hour=10)          # alert on breach
+pyerror.set_sampling(rate=10, threshold=20)     # 1-in-10 over 20 occurrences
+pyerror.set_release()                           # auto-detect via git short SHA
+pyerror.configure_integrations(
+    discord_webhook="https://...",
+    teams_webhook="https://...",
+    webhook_url="https://internal/...",
+    pagerduty_routing_key="...",
+    opsgenie_api_key="...",
+)
+pyerror.dashboard.serve(port=8765)              # self-hosted dashboard
+```
+
+### Framework integrations
+
+```python
+# Django (settings.py)
+MIDDLEWARE = ["pyerror.django_support.PyErrorMiddleware", ...]
+
+# Celery
+from pyerror.tasks_support import install_celery_hooks
+install_celery_hooks()
+
+# AWS Lambda
+@pyerror.lambda_handler
+def handler(event, context): ...
+
+# Click / argparse
+@pyerror.humanize_cli
+def main(): ...
+
+# SQLAlchemy / psycopg
+pyerror.explain_db_error(exc)    # rule-based DB error translator
+```
+
+### Education
+
+```python
+import pyerror
+pyerror.set_language("hi")                  # KeyError -> Hindi translation
+entry = pyerror.lookup("ZeroDivisionError") # offline encyclopedia, no active exc
+pyerror.classroom_mode(level=1)             # gradual hints, leading questions
+pyerror.quiz()                              # multiple-choice cause quiz
+pyerror.configure_community(endpoint="https://your-server", enabled=True)
+pyerror.share_fix(exc, "fixed by upgrading numpy")
+pyerror.fetch_fixes(exc)                    # crowdsourced fix notes
+```
+
+Hindi sample for a `KeyError`:
+
+```
+व्याख्या: आपने डिक्शनरी में एक ऐसी कुंजी (key) तक पहुँचने की कोशिश की जो मौजूद नहीं है।
+कारण:   जिस डिक्शनरी को आपने एक्सेस किया, उसमें यह कुंजी नहीं मिली।
+सुझाव:  नीचे सुझाव देखें — तकनीकी विवरण अंग्रेज़ी में सुरक्षित रखे गए हैं।
+```
+
+### Pytest plugin & IPython magics
+
+```bash
+pytest                              # plugin auto-loads via entry point, adds a humanized section
+```
+
+```python
+%load_ext pyerror.magics
+%pyerror on        # turn humanize on for this session
+%explain           # explain the last cell error
+```
+
+### Install extras
+
+```bash
+pip install pyerror-intel[otel,metrics,dashboard,structlog]
+pip install pyerror-intel[all]
+```
+
+---
+
 ## ⚙️ Configuration Table
 
 Configure settings anytime using `pyerror.configure(...)`.

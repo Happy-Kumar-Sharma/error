@@ -1,7 +1,7 @@
 import os
 from setuptools import setup, find_packages
 
-def get_requirements(file_path: str) -> list[str]:
+def get_requirements(file_path: str) -> list:
     """This function will return the list of packages"""
     print(f"Looking for requirements file at: {os.path.abspath(file_path)}")
     requirements = []
@@ -18,7 +18,7 @@ def get_requirements(file_path: str) -> list[str]:
 
 setup(
     name='pyerror-intel',
-    version='0.1.3',
+    version='0.2.0',
     description='A Python error intelligence library for learners and production systems.',
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
@@ -32,6 +32,31 @@ setup(
     },
     packages=find_packages(),
     install_requires=get_requirements("requirements.txt"),
+    extras_require={
+        "otel": ["opentelemetry-api>=1.20"],
+        "ai": [],
+        "metrics": ["prometheus-client"],
+        "dashboard": ["flask"],
+        "structlog": ["structlog"],
+        "redis": ["redis"],
+        "django": ["django"],
+        "celery": ["celery"],
+        "rq": ["rq"],
+        "dramatiq": ["dramatiq"],
+        "sqlalchemy": ["sqlalchemy"],
+        "all": [
+            "opentelemetry-api>=1.20", "prometheus-client", "flask",
+            "structlog",
+        ],
+    },
+    entry_points={
+        "console_scripts": [
+            "pyerror=pyerror.cli:main",
+        ],
+        "pytest11": [
+            "pyerror=pyerror.pytest_plugin",
+        ],
+    },
     python_requires='>=3.7',
     license='MIT',
     keywords='error traceback debugger debug humanize logging exception analytics sentry slack flask fastapi',

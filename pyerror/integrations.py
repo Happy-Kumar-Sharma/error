@@ -18,6 +18,12 @@ _email_config: Optional[Dict[str, Any]] = None  # host, port, username, password
 _rate_limit_seconds: Optional[int] = None
 _alert_history: Dict[str, float] = {}
 _alert_suppressed_counts: Dict[str, int] = {}
+_discord_webhook: Optional[str] = None
+_teams_webhook: Optional[str] = None
+_webhook_url: Optional[str] = None
+_pagerduty_routing_key: Optional[str] = None
+_opsgenie_api_key: Optional[str] = None
+_opsgenie_region: str = "us"
 
 def _get_exception_signature(exc: BaseException) -> str:
     exc_name = type(exc).__name__
@@ -59,10 +65,19 @@ def configure_integrations(
     slack_webhook: Optional[str] = None,
     sentry_dsn: Optional[str] = None,
     email_config: Optional[Dict[str, Any]] = None,
-    rate_limit_seconds: Optional[int] = _sentinel
+    rate_limit_seconds: Optional[int] = _sentinel,
+    discord_webhook: Optional[str] = None,
+    teams_webhook: Optional[str] = None,
+    webhook_url: Optional[str] = None,
+    pagerduty_routing_key: Optional[str] = None,
+    opsgenie_api_key: Optional[str] = None,
+    opsgenie_region: Optional[str] = None,
 ):
-    """Configures global credentials/webhooks for Sentry, Slack, and Email notifications."""
+    """Configures global credentials/webhooks for Sentry, Slack, Email, Discord,
+    Teams, generic webhook, PagerDuty, and Opsgenie notifications."""
     global _slack_webhook, _sentry_dsn, _email_config, _rate_limit_seconds
+    global _discord_webhook, _teams_webhook, _webhook_url
+    global _pagerduty_routing_key, _opsgenie_api_key, _opsgenie_region
     if slack_webhook is not None:
         _slack_webhook = slack_webhook
     if sentry_dsn is not None:
@@ -71,6 +86,146 @@ def configure_integrations(
         _email_config = email_config
     if rate_limit_seconds is not _sentinel:
         _rate_limit_seconds = rate_limit_seconds
+    if discord_webhook is not None:
+        _discord_webhook = discord_webhook
+    if teams_webhook is not None:
+        _teams_webhook = teams_webhook
+    if webhook_url is not None:
+        _webhook_url = webhook_url
+    if pagerduty_routing_key is not None:
+        _pagerduty_routing_key = pagerduty_routing_key
+    if opsgenie_api_key is not None:
+        _opsgenie_api_key = opsgenie_api_key
+    if opsgenie_region is not None:
+        _opsgenie_region = opsgenie_region
+
+
+def _build_payload(exc: BaseException) -> Dict[str, Any]:
+    details = SuggestionEngine.get_details(exc)
+    fp = ""
+    try:
+        from pyerror.otel import fingerprint
+        fp = fingerprint(exc)
+    except Exception:
+        pass
+    rel = None
+    try:
+        from pyerror import analytics
+        rel = analytics._RELEASE
+    except Exception:
+        pass
+    msg = Formatter.scrub_text(str(exc))
+    return {
+        "error_type": type(exc).__name__,
+        "message": msg,
+        "translation": details.get("translation", ""),
+        "suggestions": details.get("suggestions", [])[:5],
+        "fingerprint": fp,
+        "release": rel,
+        "timestamp": time.time(),
+    }
+
+
+def _post_json(url: str, payload: Dict[str, Any], headers: Optional[Dict[str, str]] = None,
+               timeout: float = 5.0) -> bool:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=data, method="POST",
+        headers={"Content-Type": "application/json", **(headers or {})},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return 200 <= resp.status < 300
+    except Exception as exc:
+        sys.stderr.write("pyerror integration: POST {} failed: {}\n".format(url, exc))
+        return False
+
+
+def notify_discord(exc: BaseException, webhook_url: Optional[str] = None) -> bool:
+    url = webhook_url or _discord_webhook
+    if not url:
+        return False
+    payload = _build_payload(exc)
+    content = "**{}**: {}\n{}".format(payload["error_type"], payload["message"], payload["translation"])
+    return _post_json(url, {"content": content[:1800], "embeds": [{
+        "title": "pyerror — " + payload["error_type"],
+        "description": payload["translation"][:1800],
+        "fields": [{"name": "Fingerprint", "value": payload["fingerprint"] or "n/a"}],
+    }]})
+
+
+def notify_teams(exc: BaseException, webhook_url: Optional[str] = None) -> bool:
+    url = webhook_url or _teams_webhook
+    if not url:
+        return False
+    payload = _build_payload(exc)
+    card = {
+        "@type": "MessageCard",
+        "@context": "http://schema.org/extensions",
+        "summary": "pyerror " + payload["error_type"],
+        "title": "pyerror — " + payload["error_type"],
+        "text": "{}\n\n{}".format(payload["message"], payload["translation"]),
+        "sections": [{
+            "facts": [
+                {"name": "Fingerprint", "value": payload["fingerprint"] or "n/a"},
+                {"name": "Release", "value": str(payload["release"] or "n/a")},
+            ]
+        }],
+    }
+    return _post_json(url, card)
+
+
+def notify_webhook(exc: BaseException, webhook_url: Optional[str] = None) -> bool:
+    url = webhook_url or _webhook_url
+    if not url:
+        return False
+    return _post_json(url, _build_payload(exc))
+
+
+def notify_pagerduty(exc: BaseException, severity: str = "error",
+                     routing_key: Optional[str] = None) -> bool:
+    key = routing_key or _pagerduty_routing_key
+    if not key:
+        return False
+    payload = _build_payload(exc)
+    event = {
+        "routing_key": key,
+        "event_action": "trigger",
+        "dedup_key": payload["fingerprint"] or payload["error_type"],
+        "payload": {
+            "summary": "{}: {}".format(payload["error_type"], payload["message"])[:1024],
+            "source": "pyerror",
+            "severity": severity,
+            "custom_details": {
+                "translation": payload["translation"],
+                "suggestions": payload["suggestions"],
+                "release": payload["release"],
+            },
+        },
+    }
+    return _post_json("https://events.pagerduty.com/v2/enqueue", event)
+
+
+def notify_opsgenie(exc: BaseException, priority: str = "P3",
+                    api_key: Optional[str] = None, region: Optional[str] = None) -> bool:
+    key = api_key or _opsgenie_api_key
+    if not key:
+        return False
+    reg = (region or _opsgenie_region or "us").lower()
+    base = "https://api.opsgenie.com" if reg == "us" else "https://api.eu.opsgenie.com"
+    payload = _build_payload(exc)
+    body = {
+        "message": "{}: {}".format(payload["error_type"], payload["message"])[:130],
+        "description": payload["translation"],
+        "priority": priority,
+        "alias": payload["fingerprint"] or payload["error_type"],
+        "details": {
+            "release": payload["release"] or "",
+            "suggestions": "; ".join(payload["suggestions"][:3]),
+        },
+    }
+    return _post_json(base + "/v2/alerts", body,
+                      headers={"Authorization": "GenieKey " + key})
 
 def notify_slack(exc: BaseException, webhook_url: Optional[str] = None) -> bool:
     """

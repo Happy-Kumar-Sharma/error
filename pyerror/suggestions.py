@@ -444,4 +444,16 @@ if name == "Alice":
                     "Wait a few seconds for the operating system to release the socket after closing a previous process."
                 ]
 
+        # Fuzzy "Did you mean?" matches go first — when available they are
+        # almost always the most actionable suggestion.
+        try:
+            from pyerror.fuzzy import suggest_names
+            fuzzy_matches = suggest_names(exc)
+            if fuzzy_matches:
+                result["suggestions"] = fuzzy_matches + [
+                    s for s in result["suggestions"] if s not in fuzzy_matches
+                ]
+        except Exception:
+            pass
+
         return result

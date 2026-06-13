@@ -102,6 +102,13 @@ def _custom_excepthook(exc_type, exc_value, exc_traceback):
     except Exception:
         pass
 
+    # Mirror diagnostics onto the active OpenTelemetry span, if any
+    try:
+        from pyerror import otel
+        otel.record_exception(exc_value)
+    except Exception:
+        pass
+
     try:
         # In production mode, print JSON to stderr
         if _traceback_mode == "production":
