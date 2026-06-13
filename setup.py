@@ -18,7 +18,7 @@ def get_requirements(file_path: str) -> list:
 
 setup(
     name='pyerror-intel',
-    version='0.2.0',
+    version='1.0.0',
     description='A Python error intelligence library for learners and production systems.',
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",

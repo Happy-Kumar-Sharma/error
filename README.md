@@ -4,8 +4,7 @@
 [![Python Version](https://img.shields.io/pypi/pyversions/pyerror-intel.svg)](https://pypi.org/project/pyerror-intel/)
 [![License](https://img.shields.io/github/license/Happy-Kumar-Sharma/error.svg)](https://github.com/Happy-Kumar-Sharma/error/blob/main/LICENSE)
 
-> **Because common sense is not so common. Now it is — in Python!**
-> A Python error intelligence library for learners, developers, and production systems.
+> **A Python error intelligence library for learners, developers, and production systems.**
 
 `pyerror` is a complete diagnostics ecosystem that translates tracebacks, suggests fixes, captures local scope details safely, and recovers gracefully when needed. It works in the Terminal, Jupyter Notebooks, and Production environments.
 
